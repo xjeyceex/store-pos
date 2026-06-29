@@ -33,7 +33,7 @@ export default async function SalesPage() {
     <div>
       <PageHeader
         title="Sales"
-        description={`Record sales for ${ctx.branchName}.`}
+        description={`Record sales for ${ctx.branchName}. Pick from catalog or type a new item.`}
       />
       <SalesClient products={products} sales={sales} currency={currency} />
     </div>

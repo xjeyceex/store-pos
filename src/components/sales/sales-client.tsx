@@ -5,7 +5,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { Trash2, ShoppingCart, Receipt } from "lucide-react";
+import { Trash2, Receipt, Minus, Plus } from "lucide-react";
 
 import {
   Card,
@@ -42,6 +42,16 @@ import { createSale, deleteSale } from "@/lib/actions/sales";
 import type { ProductOption } from "@/lib/queries/products";
 import type { SaleRow } from "@/lib/queries/sales";
 
+const CUSTOM = "__custom__";
+
+const defaultValues: z.input<typeof saleSchema> = {
+  productId: "",
+  name: "",
+  unitPrice: 0,
+  quantity: 1,
+  date: toISODate(new Date()),
+};
+
 export function SalesClient({
   products,
   sales,
@@ -57,25 +67,69 @@ export function SalesClient({
     control,
     watch,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<z.input<typeof saleSchema>, unknown, SaleInput>({
     resolver: zodResolver(saleSchema),
-    defaultValues: { productId: "", quantity: 1, date: toISODate(new Date()) },
+    defaultValues,
   });
 
   const productId = watch("productId");
   const quantity = Number(watch("quantity")) || 0;
+  const unitPrice = Number(watch("unitPrice")) || 0;
+  const isCustom = !productId;
   const selected = products.find((p) => p.id === productId);
-  const revenue = selected ? selected.sellingPrice * quantity : 0;
-  const profit = selected
-    ? (selected.sellingPrice - selected.costPrice) * quantity
-    : 0;
+
+  const productItems = [
+    { value: CUSTOM, label: "Custom item (new)" },
+    ...products.map((p) => ({ value: p.id, label: p.name })),
+  ];
+
+  const displayPrice = isCustom
+    ? unitPrice
+    : selected
+      ? selected.sellingPrice
+      : 0;
+  const displayCost = isCustom ? 0 : selected ? selected.costPrice : 0;
+  const revenue = displayPrice * quantity;
+  const profit = (displayPrice - displayCost) * quantity;
+
+  function selectProduct(value: string) {
+    if (value === CUSTOM) {
+      setValue("productId", "");
+      setValue("name", "");
+      setValue("unitPrice", 0);
+      return;
+    }
+    const p = products.find((x) => x.id === value);
+    setValue("productId", value);
+    setValue("name", "");
+    if (p) setValue("unitPrice", p.sellingPrice);
+  }
+
+  function adjustQty(delta: number) {
+    const next = Math.max(1, quantity + delta);
+    setValue("quantity", next);
+  }
 
   async function onSubmit(values: SaleInput) {
-    const result = await createSale(values);
+    const payload: SaleInput = values.productId
+      ? {
+          productId: values.productId,
+          quantity: values.quantity,
+          date: values.date,
+        }
+      : {
+          name: values.name,
+          unitPrice: values.unitPrice,
+          quantity: values.quantity,
+          date: values.date,
+        };
+
+    const result = await createSale(payload);
     if (result.success) {
       toast.success(result.message ?? "Sale recorded");
-      reset({ productId: "", quantity: 1, date: toISODate(new Date()) });
+      reset(defaultValues);
     } else {
       toast.error(result.error);
     }
@@ -89,93 +143,177 @@ export function SalesClient({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Sale Entry</CardTitle>
+      <Card className="border-primary/20 shadow-sm">
+        <CardHeader className="pb-3">
+          <CardTitle>Quick Sale</CardTitle>
           <CardDescription>
-            Record a sale. Stock and profit update automatically.
+            Pick a product or type a new item — custom sales are saved to your
+            product list automatically.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {products.length === 0 ? (
-            <EmptyState
-              icon={ShoppingCart}
-              title="No products yet"
-              description="Add products before recording sales."
-            />
-          ) : (
-            <form
-              onSubmit={handleSubmit(onSubmit)}
-              className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:items-end"
-            >
-              <div className="grid gap-2 sm:col-span-2 lg:col-span-1">
-                <Label>Product</Label>
-                <Controller
-                  control={control}
-                  name="productId"
-                  render={({ field }) => (
-                    <Select
-                      value={field.value || null}
-                      onValueChange={(v) => field.onChange(v)}
-                      items={products.map((p) => ({ value: p.id, label: p.name }))}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((p) => (
-                          <SelectItem
-                            key={p.id}
-                            value={p.id}
-                            disabled={p.currentStock <= 0}
-                          >
-                            {p.name} ({formatNumber(p.currentStock)} left)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-                <FieldError message={errors.productId?.message} />
-              </div>
+          <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Item</Label>
+              <Controller
+                control={control}
+                name="productId"
+                render={({ field }) => (
+                  <Select
+                    value={field.value ? field.value : CUSTOM}
+                    onValueChange={(v) => selectProduct(v ?? CUSTOM)}
+                    items={productItems}
+                  >
+                    <SelectTrigger className="h-11 w-full">
+                      <SelectValue placeholder="Select or add item" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={CUSTOM}>Custom item (new)</SelectItem>
+                      {products.map((p) => (
+                        <SelectItem
+                          key={p.id}
+                          value={p.id}
+                          disabled={p.currentStock <= 0}
+                        >
+                          {p.name} ({formatNumber(p.currentStock)} left)
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              <FieldError message={errors.productId?.message} />
+            </div>
 
+            {isCustom ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="sale-name">Item name</Label>
+                  <Input
+                    id="sale-name"
+                    className="h-11"
+                    placeholder="e.g. Kape, Bigas"
+                    autoFocus
+                    {...register("name")}
+                  />
+                  <FieldError message={errors.name?.message} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="sale-price">Selling price</Label>
+                  <Input
+                    id="sale-price"
+                    className="h-11"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    inputMode="decimal"
+                    placeholder="0.00"
+                    {...register("unitPrice")}
+                  />
+                  <FieldError message={errors.unitPrice?.message} />
+                </div>
+              </div>
+            ) : selected ? (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+                <span>
+                  <span className="text-muted-foreground">Price: </span>
+                  <span className="font-medium tabular-nums">
+                    {formatCurrency(selected.sellingPrice, currency)}
+                  </span>
+                </span>
+                <span>
+                  <span className="text-muted-foreground">In stock: </span>
+                  <span className="font-medium tabular-nums">
+                    {formatNumber(selected.currentStock)}
+                  </span>
+                </span>
+              </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
               <div className="grid gap-2">
                 <Label htmlFor="quantity">Quantity</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  inputMode="numeric"
-                  {...register("quantity")}
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-11 shrink-0"
+                    aria-label="Decrease quantity"
+                    onClick={() => adjustQty(-1)}
+                    disabled={quantity <= 1}
+                  >
+                    <Minus className="size-4" />
+                  </Button>
+                  <Input
+                    id="quantity"
+                    className="h-11 text-center text-lg font-medium tabular-nums"
+                    type="number"
+                    min="1"
+                    inputMode="numeric"
+                    {...register("quantity")}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-11 shrink-0"
+                    aria-label="Increase quantity"
+                    onClick={() => adjustQty(1)}
+                  >
+                    <Plus className="size-4" />
+                  </Button>
+                </div>
                 <FieldError message={errors.quantity?.message} />
               </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="date">Date</Label>
-                <Input id="date" type="date" {...register("date")} />
+                <Input
+                  id="date"
+                  className="h-11"
+                  type="date"
+                  {...register("date")}
+                />
                 <FieldError message={errors.date?.message} />
               </div>
 
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                size="lg"
+                className="h-11 w-full sm:w-auto sm:min-w-36"
+                disabled={isSubmitting}
+              >
                 {isSubmitting ? "Saving..." : "Record Sale"}
               </Button>
+            </div>
 
-              {selected ? (
-                <div className="rounded-lg bg-muted/50 p-3 text-sm sm:col-span-2 lg:col-span-4">
-                  <span className="text-muted-foreground">Revenue: </span>
-                  <span className="font-medium">
+            {(selected || isCustom) && (displayPrice > 0 || isCustom) ? (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Total: </span>
+                  <span className="text-lg font-semibold tabular-nums">
                     {formatCurrency(revenue, currency)}
                   </span>
-                  <span className="mx-2 text-muted-foreground">•</span>
-                  <span className="text-muted-foreground">Profit: </span>
-                  <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                    {formatCurrency(profit, currency)}
-                  </span>
                 </div>
-              ) : null}
-            </form>
-          )}
+                {!isCustom ? (
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Profit: </span>
+                    <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+                      {formatCurrency(profit, currency)}
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            {isCustom ? (
+              <p className="text-xs text-muted-foreground">
+                New items are added to Products with this price. You can edit
+                cost and stock later.
+              </p>
+            ) : null}
+          </form>
         </CardContent>
       </Card>
 
