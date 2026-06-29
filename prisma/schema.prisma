@@ -1,0 +1,208 @@
+// Sari-Sari Store Tracker - Prisma schema
+// SQLite does not support native enums, so enum-like fields use String
+// with values validated in the Zod layer (see src/lib/constants.ts).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// A branch is an independent store instance. All operational data is scoped
+// to a branch; reports can be viewed per-branch or consolidated across all.
+model Branch {
+  id        String   @id @default(cuid())
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products       Product[]
+  inventoryLogs  InventoryLog[]
+  sales          Sale[]
+  expenses       Expense[]
+  customers      Customer[]
+  utangs         Utang[]
+  dailySummaries DailySummary[]
+
+  @@index([name])
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  products  Product[]
+}
+
+model Product {
+  id            String         @id @default(cuid())
+  branchId      String
+  branch        Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name          String
+  categoryId    String?
+  category      Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  costPrice     Float          @default(0)
+  sellingPrice  Float          @default(0)
+  currentStock  Int            @default(0)
+  minStockLevel Int            @default(0)
+  notes         String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  inventoryLogs InventoryLog[]
+  sales         Sale[]
+  utangItems    UtangItem[]
+
+  @@index([branchId])
+  @@index([categoryId])
+  @@index([name])
+}
+
+model InventoryLog {
+  id             String   @id @default(cuid())
+  branchId       String
+  branch         Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName    String
+  quantityBefore Int
+  quantityChange Int
+  quantityAfter  Int
+  reason         String // NEW_STOCK | SALE | DAMAGE | PERSONAL_USE | ADJUSTMENT | RETURN | UTANG
+  note           String?
+  createdAt      DateTime @default(now())
+
+  @@index([branchId])
+  @@index([productId])
+  @@index([createdAt])
+}
+
+model Sale {
+  id               String   @id @default(cuid())
+  branchId         String
+  branch           Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  productId        String?
+  product          Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName      String
+  quantity         Int
+  unitSellingPrice Float
+  unitCostPrice    Float
+  revenue          Float
+  productCost      Float
+  grossProfit      Float
+  saleDate         DateTime @default(now())
+  createdAt        DateTime @default(now())
+
+  @@index([branchId])
+  @@index([productId])
+  @@index([saleDate])
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  description String
+  category    String // ELECTRICITY | WATER | INTERNET | RENT | TRANSPORTATION | SUPPLIES | MISCELLANEOUS
+  amount      Float
+  expenseDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([branchId])
+  @@index([expenseDate])
+  @@index([category])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name      String
+  phone     String?
+  notes     String?
+  createdAt DateTime @default(now())
+  utangs    Utang[]
+
+  @@index([branchId])
+  @@index([name])
+}
+
+model Utang {
+  id         String         @id @default(cuid())
+  branchId   String
+  branch     Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  amount     Float
+  utangDate  DateTime       @default(now())
+  status     String         @default("UNPAID") // UNPAID | PARTIALLY_PAID | PAID
+  notes      String?
+  createdAt  DateTime       @default(now())
+  payments   UtangPayment[]
+  items      UtangItem[]
+
+  @@index([branchId])
+  @@index([customerId])
+  @@index([status])
+  @@index([utangDate])
+}
+
+model UtangItem {
+  id        String   @id @default(cuid())
+  utangId   String
+  utang     Utang    @relation(fields: [utangId], references: [id], onDelete: Cascade)
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name      String
+  quantity  Int
+  unitPrice Float
+  lineTotal Float
+  createdAt DateTime @default(now())
+
+  @@index([utangId])
+  @@index([productId])
+}
+
+model UtangPayment {
+  id          String   @id @default(cuid())
+  utangId     String
+  utang       Utang    @relation(fields: [utangId], references: [id], onDelete: Cascade)
+  amount      Float
+  paymentDate DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([utangId])
+  @@index([paymentDate])
+}
+
+model DailySummary {
+  id             String   @id @default(cuid())
+  branchId       String
+  branch         Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  date           DateTime
+  revenue        Float    @default(0)
+  expenses       Float    @default(0)
+  grossProfit    Float    @default(0)
+  netProfit      Float    @default(0)
+  salesCount     Int      @default(0)
+  openingCash    Float    @default(0)
+  closingCash    Float    @default(0)
+  inventoryValue Float    @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([branchId, date])
+  @@index([branchId])
+  @@index([date])
+}
+
+model Settings {
+  id                       Int      @id @default(1)
+  storeName                String   @default("My Sari-Sari Store")
+  currency                 String   @default("PHP")
+  defaultLowStockThreshold Int      @default(5)
+  updatedAt                DateTime @updatedAt
+}

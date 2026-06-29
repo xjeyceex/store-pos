@@ -1,65 +1,177 @@
-import Image from "next/image";
+import {
+  Coins,
+  TrendingUp,
+  Boxes,
+  CreditCard,
+  AlertTriangle,
+  PackageX,
+} from "lucide-react";
 
-export default function Home() {
+import { PageHeader } from "@/components/shared/page-header";
+import { StatCard } from "@/components/shared/stat-card";
+import { PeriodStatsCards } from "@/components/dashboard/period-stats-cards";
+import { CashPositionCard } from "@/components/dashboard/cash-position-card";
+import { RestockCard } from "@/components/dashboard/restock-card";
+import { RecentActivity } from "@/components/dashboard/recent-activity";
+import { AnalyticsCharts } from "@/components/dashboard/analytics-charts";
+import { Layers } from "lucide-react";
+
+import { formatCurrency, formatNumber } from "@/lib/currency";
+import { resolveDateRange } from "@/lib/dates";
+import { getCurrency, getSettings } from "@/lib/queries/settings";
+import { getBranchContext } from "@/lib/queries/branches";
+import { getDashboardPeriods } from "@/lib/queries/analytics";
+import {
+  getInventorySummary,
+  getOutstandingUtangTotal,
+  getCashPositionToday,
+  getRecentActivity,
+} from "@/lib/queries/dashboard";
+import { getRestockProducts } from "@/lib/queries/products";
+import {
+  getProfitSeries,
+  getTopSellingProducts,
+  getProductPerformanceAll,
+  getInventoryValueTrend,
+  type AnalyticsData,
+} from "@/lib/queries/analytics";
+
+export const dynamic = "force-dynamic";
+
+export default async function DashboardPage() {
+  const range = resolveDateRange("LAST_30_DAYS");
+  const ctx = await getBranchContext();
+  const branchId = ctx.branchId; // null => consolidated across all branches
+  const consolidated = ctx.mode === "all";
+  const scopeLabel = consolidated
+    ? `All Branches (${ctx.branches.length})`
+    : ctx.branchName ?? "your store";
+
+  const [
+    settings,
+    currency,
+    periods,
+    inventory,
+    outstandingUtang,
+    cash,
+    restock,
+    activity,
+    daily,
+    weekly,
+    monthly,
+    topProducts,
+    productPerformance,
+    inventoryTrend,
+  ] = await Promise.all([
+    getSettings(),
+    getCurrency(),
+    getDashboardPeriods(branchId),
+    getInventorySummary(branchId),
+    getOutstandingUtangTotal(branchId),
+    getCashPositionToday(branchId),
+    getRestockProducts(branchId),
+    getRecentActivity(branchId, 8),
+    getProfitSeries(range, "day", branchId),
+    getProfitSeries(range, "week", branchId),
+    getProfitSeries(range, "month", branchId),
+    getTopSellingProducts(range, 7, branchId),
+    getProductPerformanceAll(range, branchId),
+    getInventoryValueTrend(range, branchId),
+  ]);
+
+  const analytics: AnalyticsData = {
+    daily,
+    weekly,
+    monthly,
+    topProducts,
+    productPerformance,
+    inventoryTrend,
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div>
+      <PageHeader
+        title="Dashboard"
+        description={
+          consolidated
+            ? `${settings.storeName} — consolidated across ${ctx.branches.length} branch${ctx.branches.length === 1 ? "" : "es"}.`
+            : `${settings.storeName} — ${scopeLabel}.`
+        }
+      >
+        {consolidated ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            <Layers className="size-3.5" />
+            All Branches
+          </span>
+        ) : null}
+      </PageHeader>
+
+      <div className="space-y-6">
+        <PeriodStatsCards periods={periods} currency={currency} />
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard
+            label="Outstanding Utang"
+            value={formatCurrency(outstandingUtang, currency)}
+            icon={CreditCard}
+            tone={outstandingUtang > 0 ? "warning" : "default"}
+            hint="Total unpaid customer credit"
+          />
+          <StatCard
+            label="Inventory Value"
+            value={formatCurrency(inventory.inventoryValue, currency)}
+            icon={Boxes}
+            hint={`${formatNumber(inventory.productCount)} products in catalog`}
+          />
+          <StatCard
+            label="Potential Profit"
+            value={formatCurrency(inventory.potentialProfit, currency)}
+            icon={TrendingUp}
+            tone="positive"
+            hint={`Potential revenue ${formatCurrency(inventory.potentialRevenue, currency)}`}
+          />
+          <StatCard
+            label="Low Stock"
+            value={formatNumber(inventory.lowStockCount)}
+            icon={AlertTriangle}
+            tone={inventory.lowStockCount > 0 ? "warning" : "default"}
+            hint="At or below minimum level"
+          />
+          <StatCard
+            label="Out of Stock"
+            value={formatNumber(inventory.outOfStockCount)}
+            icon={PackageX}
+            tone={inventory.outOfStockCount > 0 ? "negative" : "default"}
+            hint="Needs immediate restocking"
+          />
+          <StatCard
+            label="Today's Closing Cash"
+            value={formatCurrency(cash.closingCash, currency)}
+            icon={Coins}
+            tone="positive"
+            hint={`Opening ${formatCurrency(cash.openingCash, currency)}`}
+          />
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <CashPositionCard cash={cash} currency={currency} />
+          <RestockCard products={restock} />
+          <RecentActivity
+            sales={activity.sales}
+            expenses={activity.expenses}
+            inventory={activity.inventory}
+            payments={activity.payments}
+            currency={currency}
+            showBranch={consolidated}
+          />
+        </div>
+
+        <AnalyticsCharts
+          initial={analytics}
+          currency={currency}
+          initialRange={{ preset: "LAST_30_DAYS", from: "", to: "" }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
     </div>
   );
 }
