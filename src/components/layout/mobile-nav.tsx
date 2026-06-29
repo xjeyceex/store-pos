@@ -53,7 +53,7 @@ export function MobileNav({
         <Store className="size-5 shrink-0 text-primary" />
         <span className="truncate">{storeName}</span>
       </div>
-      <div className="w-40 shrink-0">
+      <div className="min-w-0 flex-1 sm:max-w-48">
         <BranchSwitcher branches={branches} selected={selectedBranch} />
       </div>
     </header>

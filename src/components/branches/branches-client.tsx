@@ -1,7 +1,5 @@
 "use client";
 
-import * as React from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Plus,
@@ -21,7 +19,7 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { BranchFormDialog } from "@/components/branches/branch-form-dialog";
 import { formatCurrency, formatNumber } from "@/lib/currency";
 import { formatDate } from "@/lib/dates";
-import { deleteBranch, setActiveBranch } from "@/lib/actions/branches";
+import { deleteBranch } from "@/lib/actions/branches";
 import type { BranchRow } from "@/lib/queries/branches-admin";
 
 export function BranchesClient({
@@ -33,21 +31,10 @@ export function BranchesClient({
   activeBranchId: string | null;
   currency: string;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = React.useTransition();
-
   async function handleDelete(id: string) {
     const result = await deleteBranch(id);
     if (result.success) toast.success(result.message ?? "Deleted");
     else toast.error(result.error);
-  }
-
-  function handleSwitch(id: string) {
-    startTransition(async () => {
-      await setActiveBranch(id);
-      router.refresh();
-      toast.success("Switched active branch.");
-    });
   }
 
   return (
@@ -134,16 +121,18 @@ export function BranchesClient({
 
                   <div className="mt-auto flex items-center gap-1 border-t pt-3">
                     {!isActive ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        disabled={isPending}
-                        onClick={() => handleSwitch(b.id)}
-                      >
-                        <ArrowRightLeft className="size-4" />
-                        Switch to
-                      </Button>
+                      <form action="/api/branch" method="POST" className="flex-1">
+                        <input type="hidden" name="branchId" value={b.id} />
+                        <Button
+                          type="submit"
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                        >
+                          <ArrowRightLeft className="size-4" />
+                          Switch to
+                        </Button>
+                      </form>
                     ) : (
                       <span className="flex-1 text-xs text-muted-foreground">
                         Currently active branch
