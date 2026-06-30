@@ -66,6 +66,45 @@ DATABASE_URL="file:./dev.db"
 | `npm run db:migrate` | Create/apply migrations and the SQLite database     |
 | `npm run db:seed`    | Reset and seed the database with sample data        |
 | `npm run db:studio`  | Open Prisma Studio to inspect the database          |
+| `npm run local:setup`| One-time production setup (migrate + build)         |
+| `npm run local:start`| Run production app on your Wi‑Fi (HTTPS, port 3000) |
+| `npm run local`      | Setup then start (first run on a new PC)            |
+| `npm run db:backup`  | Copy `dev.db` into `backups/` with a timestamp     |
+
+## Run locally only this PC (local deployment)
+
+Use this when the store app should run on **one computer** on your Wi‑Fi — phones and tablets open it in the browser. The database stays in `dev.db` on that PC.
+
+### First time on the store PC
+
+```bash
+npm install
+npm run local
+```
+
+That applies migrations, builds the app, and starts it with HTTPS so **barcode scanning works on phones**.
+
+### Every day after that
+
+```bash
+npm run local:start
+```
+
+Then on any device on the same Wi‑Fi, open the URL printed in the terminal (e.g. `https://192.168.1.5:3000`). Accept the browser’s certificate warning once — it’s your own self-signed cert on your own network.
+
+### Backup your data
+
+```bash
+npm run db:backup
+```
+
+Copies `dev.db` to `backups/dev-<timestamp>.db`. Do this regularly (e.g. weekly or before Windows updates).
+
+### Notes
+
+- Keep the PC awake while the store is open; closing the terminal stops the app.
+- After schema changes from development, run `npm run local:setup` once, then `npm run local:start`.
+- Windows Firewall may ask to allow Node on private networks — choose **Allow**.
 
 ## Project structure
 
