@@ -7,6 +7,7 @@ import {
   type PaginatedResult,
 } from "@/lib/pagination";
 import type { Prisma } from "@/generated/prisma/client";
+import { orderNewestProduct } from "@/lib/queries/sort";
 
 export type ProductRow = {
   id: string;
@@ -98,7 +99,7 @@ export async function getProductsPage(
     prisma.product.findMany({
       where,
       include: { category: true },
-      orderBy: { name: "asc" },
+      orderBy: orderNewestProduct,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

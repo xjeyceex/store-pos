@@ -5,6 +5,7 @@ import {
   type PaginatedResult,
 } from "@/lib/pagination";
 import type { Prisma } from "@/generated/prisma/client";
+import { orderNewestSale } from "@/lib/queries/sort";
 
 export type SaleRow = {
   id: string;
@@ -55,7 +56,7 @@ export async function getSalesPage(
     prisma.sale.count({ where }),
     prisma.sale.findMany({
       where,
-      orderBy: { saleDate: "desc" },
+      orderBy: orderNewestSale,
       skip: (page - 1) * pageSize,
       take: pageSize,
       select: saleSelect,
@@ -71,7 +72,7 @@ export async function getSales(
 ): Promise<SaleRow[]> {
   return prisma.sale.findMany({
     where: branchId ? { branchId } : undefined,
-    orderBy: { saleDate: "desc" },
+    orderBy: orderNewestSale,
     take: limit,
     select: saleSelect,
   });

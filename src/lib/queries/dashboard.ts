@@ -3,6 +3,12 @@ import { roundMoney } from "@/lib/currency";
 import { getStockStatus } from "@/lib/stock";
 import { todayRange, dayKey } from "@/lib/dates";
 import { getPeriodStats } from "@/lib/queries/analytics";
+import {
+  orderNewestExpense,
+  orderNewestInventoryLog,
+  orderNewestPayment,
+  orderNewestSale,
+} from "@/lib/queries/sort";
 import type {
   InventorySummary,
   CashPosition,
@@ -145,7 +151,7 @@ export async function getRecentActivity(branchId?: string | null, take = 6) {
   const [sales, expenses, inventory, payments] = await Promise.all([
     prisma.sale.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: orderNewestSale,
       take,
       select: {
         id: true,
@@ -159,7 +165,7 @@ export async function getRecentActivity(branchId?: string | null, take = 6) {
     }),
     prisma.expense.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: orderNewestExpense,
       take,
       select: {
         id: true,
@@ -172,7 +178,7 @@ export async function getRecentActivity(branchId?: string | null, take = 6) {
     }),
     prisma.inventoryLog.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: orderNewestInventoryLog,
       take,
       select: {
         id: true,
@@ -186,7 +192,7 @@ export async function getRecentActivity(branchId?: string | null, take = 6) {
     }),
     prisma.utangPayment.findMany({
       where: branchId ? { utang: { branchId } } : undefined,
-      orderBy: { createdAt: "desc" },
+      orderBy: orderNewestPayment,
       take,
       select: {
         id: true,

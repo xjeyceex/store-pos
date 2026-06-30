@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { FieldError } from "@/components/shared/field-error";
 import { formatCurrency, formatNumber } from "@/lib/currency";
-import { toISODate } from "@/lib/dates";
+import { todayISODate } from "@/lib/dates";
 import { utangSchema, type UtangInput } from "@/lib/validations/utang";
 import { createUtang } from "@/lib/actions/utang";
 import type { ProductOption } from "@/lib/queries/products";
@@ -55,7 +55,7 @@ export function UtangFormDialog({
   const defaults = React.useMemo<z.input<typeof utangSchema>>(
     () => ({
       customerId: presetCustomerId ?? "",
-      date: toISODate(new Date()),
+      date: todayISODate(),
       notes: "",
       items: [{ productId: "", name: "", quantity: 1, unitPrice: 0 }],
     }),

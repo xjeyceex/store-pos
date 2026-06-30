@@ -21,7 +21,7 @@ import { FieldError } from "@/components/shared/field-error";
 import { productSchema, type ProductInput } from "@/lib/validations/product";
 import { createProduct } from "@/lib/actions/products";
 import { createSale } from "@/lib/actions/sales";
-import { toISODate } from "@/lib/dates";
+import { todayISODate } from "@/lib/dates";
 import type { BarcodeLookupResult } from "@/lib/barcode-meta";
 
 const quickAddSchema = productSchema.pick({
@@ -101,7 +101,7 @@ export function QuickAddAndSellDialog({
     const sale = await createSale({
       productId,
       quantity: 1,
-      date: toISODate(new Date()),
+      date: todayISODate(),
     });
 
     if (!sale.success) {

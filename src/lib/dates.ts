@@ -129,14 +129,30 @@ export function toISODate(date: Date | string): string {
   return format(new Date(date), "yyyy-MM-dd");
 }
 
+/** Today's date for form defaults — call at render/submit time, not module load. */
+export function todayISODate(): string {
+  return toISODate(new Date());
+}
+
+function isSameCalendarDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 /**
- * Parses a yyyy-MM-dd value from a date input as a LOCAL date (set to noon to
- * avoid timezone rollovers). Falls back to now() when empty.
+ * Parses a yyyy-MM-dd value from a date input as a LOCAL date. When the value
+ * is today (or empty), returns the current date/time so new records sort as
+ * newest. Past dates are stored at local noon to avoid timezone rollovers.
  */
 export function parseDateInput(value?: string | null): Date {
   if (!value) return new Date();
   const parts = value.split("-").map(Number);
   const [y, m, d] = parts;
   if (!y || !m || !d) return new Date(value);
+  const selected = new Date(y, m - 1, d);
+  if (isSameCalendarDay(selected, new Date())) return new Date();
   return new Date(y, m - 1, d, 12, 0, 0, 0);
 }

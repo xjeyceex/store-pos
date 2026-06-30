@@ -8,6 +8,10 @@ import {
   type PaginatedResult,
 } from "@/lib/pagination";
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  orderNewestCustomer,
+  orderNewestUtang,
+} from "@/lib/queries/sort";
 
 export type CustomerRow = {
   id: string;
@@ -80,7 +84,7 @@ export async function getCustomersPage(
     prisma.customer.findMany({
       where,
       include: { utangs: { include: { payments: { select: { amount: true } } } } },
-      orderBy: { name: "asc" },
+      orderBy: orderNewestCustomer,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -100,7 +104,7 @@ export async function getCustomers(
   const customers = await prisma.customer.findMany({
     where: branchId ? { branchId } : undefined,
     include: { utangs: { include: { payments: { select: { amount: true } } } } },
-    orderBy: { name: "asc" },
+    orderBy: orderNewestCustomer,
   });
   return customers.map(mapCustomerRow);
 }
@@ -229,7 +233,7 @@ export async function getCustomerUtangsPage(
         payments: { orderBy: { paymentDate: "desc" } },
         items: { orderBy: { createdAt: "asc" } },
       },
-      orderBy: { utangDate: "desc" },
+      orderBy: orderNewestUtang,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -254,7 +258,7 @@ export async function getCustomerDetail(
           payments: { orderBy: { paymentDate: "desc" } },
           items: { orderBy: { createdAt: "asc" } },
         },
-        orderBy: { utangDate: "desc" },
+        orderBy: orderNewestUtang,
       },
     },
   });

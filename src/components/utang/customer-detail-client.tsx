@@ -26,7 +26,7 @@ import { UtangFormDialog } from "@/components/utang/utang-form-dialog";
 import { UtangEditDialog } from "@/components/utang/utang-edit-dialog";
 import { PaymentFormDialog } from "@/components/utang/payment-form-dialog";
 import { formatCurrency, formatNumber } from "@/lib/currency";
-import { formatDate } from "@/lib/dates";
+import { formatDateTime } from "@/lib/dates";
 import { deleteUtang, deletePayment } from "@/lib/actions/utang";
 import { deleteCustomer as deleteCustomerAction } from "@/lib/actions/customers";
 import type { CustomerSummary, UtangEntry } from "@/lib/queries/utang";
@@ -52,6 +52,7 @@ export function CustomerDetailClient({
     totalPages,
     totalItems,
     setPage,
+    reloadFirstPage,
     isPending,
   } = useServerPagination(initialUtangs, ({ page }) =>
     fetchCustomerUtangsPage(customer.id, { page })
@@ -69,14 +70,18 @@ export function CustomerDetailClient({
 
   async function handleDeleteUtang(id: string) {
     const result = await deleteUtang(id);
-    if (result.success) toast.success(result.message ?? "Deleted");
-    else toast.error(result.error);
+    if (result.success) {
+      toast.success(result.message ?? "Deleted");
+      reloadFirstPage();
+    } else toast.error(result.error);
   }
 
   async function handleDeletePayment(id: string) {
     const result = await deletePayment(id);
-    if (result.success) toast.success(result.message ?? "Deleted");
-    else toast.error(result.error);
+    if (result.success) {
+      toast.success(result.message ?? "Deleted");
+      reloadFirstPage();
+    } else toast.error(result.error);
   }
 
   return (
@@ -219,7 +224,7 @@ export function CustomerDetailClient({
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground">
-                  <span>Date: {formatDate(u.utangDate)}</span>
+                  <span>Date: {formatDateTime(u.utangDate)}</span>
                   <span>
                     Paid:{" "}
                     <span className="text-foreground">
@@ -279,7 +284,7 @@ export function CustomerDetailClient({
                           className="flex items-center justify-between text-sm"
                         >
                           <span className="text-muted-foreground">
-                            {formatDate(p.paymentDate)}
+                            {formatDateTime(p.paymentDate)}
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-emerald-600 dark:text-emerald-400">

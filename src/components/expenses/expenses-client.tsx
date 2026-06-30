@@ -37,7 +37,7 @@ import { useServerPaginationWithFilters } from "@/components/shared/use-server-p
 import { fetchExpensesPage } from "@/lib/actions/lists";
 import type { PaginatedResult } from "@/lib/pagination";
 import { formatCurrency } from "@/lib/currency";
-import { formatDate } from "@/lib/dates";
+import { formatDateTime } from "@/lib/dates";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/constants";
 import { deleteExpense } from "@/lib/actions/expenses";
 import type { ExpenseRow } from "@/lib/queries/expenses";
@@ -61,13 +61,16 @@ export function ExpensesClient({
     query,
     setQuery,
     setPage,
+    reloadFirstPage,
     isPending,
   } = useServerPaginationWithFilters(initial, fetchExpensesPage, { category });
 
   async function handleDelete(id: string) {
     const result = await deleteExpense(id);
-    if (result.success) toast.success(result.message ?? "Deleted");
-    else toast.error(result.error);
+    if (result.success) {
+      toast.success(result.message ?? "Deleted");
+      reloadFirstPage();
+    } else toast.error(result.error);
   }
 
   return (
@@ -141,7 +144,7 @@ export function ExpensesClient({
                 <MobileRecordCard
                   key={e.id}
                   title={e.description}
-                  subtitle={formatDate(e.expenseDate)}
+                  subtitle={formatDateTime(e.expenseDate)}
                   badge={
                     <Badge variant="secondary">
                       {expenseCategoryLabel(e.category)}
@@ -206,7 +209,7 @@ export function ExpensesClient({
                 {expenses.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="text-muted-foreground whitespace-nowrap">
-                      {formatDate(e.expenseDate)}
+                      {formatDateTime(e.expenseDate)}
                     </TableCell>
                     <TableCell className="font-medium">{e.description}</TableCell>
                     <TableCell>

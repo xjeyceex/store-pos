@@ -38,7 +38,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { FieldError } from "@/components/shared/field-error";
 import { StockStatusBadge } from "@/components/shared/status-badges";
 import { formatNumber } from "@/lib/currency";
-import { toISODate } from "@/lib/dates";
+import { todayISODate } from "@/lib/dates";
 import {
   reasonsForDirection,
   type MovementDirection,
@@ -85,7 +85,7 @@ function MovementForm({
       quantity: direction === "set" ? 0 : 1,
       reason: reasons[0].value,
       note: "",
-      date: toISODate(new Date()),
+      date: todayISODate(),
     },
   });
 
@@ -98,7 +98,7 @@ function MovementForm({
         quantity: direction === "set" ? 0 : 1,
         reason: reasons[0].value,
         note: "",
-        date: toISODate(new Date()),
+        date: todayISODate(),
       });
     } else {
       toast.error(result.error);

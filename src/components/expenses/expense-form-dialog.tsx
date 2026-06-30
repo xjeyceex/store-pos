@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { FieldError } from "@/components/shared/field-error";
 import { EXPENSE_CATEGORIES } from "@/lib/constants";
-import { toISODate } from "@/lib/dates";
+import { todayISODate, toISODate } from "@/lib/dates";
 import { expenseSchema, type ExpenseInput } from "@/lib/validations/expense";
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import type { ExpenseRow } from "@/lib/queries/expenses";
@@ -47,7 +47,7 @@ export function ExpenseFormDialog({
       description: expense?.description ?? "",
       category: (expense?.category as ExpenseInput["category"]) ?? "MISCELLANEOUS",
       amount: expense?.amount ?? 0,
-      date: expense ? toISODate(expense.expenseDate) : toISODate(new Date()),
+      date: expense ? toISODate(expense.expenseDate) : todayISODate(),
     }),
     [expense]
   );

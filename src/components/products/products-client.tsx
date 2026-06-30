@@ -60,6 +60,7 @@ export function ProductsClient({
     query,
     setQuery,
     setPage,
+    reloadFirstPage,
     isPending,
   } = useServerPaginationWithFilters(
     initial,
@@ -69,8 +70,10 @@ export function ProductsClient({
 
   async function handleDelete(id: string) {
     const result = await deleteProduct(id);
-    if (result.success) toast.success(result.message ?? "Deleted");
-    else toast.error(result.error);
+    if (result.success) {
+      toast.success(result.message ?? "Deleted");
+      reloadFirstPage();
+    } else toast.error(result.error);
   }
 
   return (

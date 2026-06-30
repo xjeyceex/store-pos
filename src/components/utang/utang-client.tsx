@@ -54,6 +54,7 @@ export function UtangClient({
     query,
     setQuery,
     setPage,
+    reloadFirstPage,
     isPending,
   } = useServerPagination(initial, fetchCustomersPage);
 

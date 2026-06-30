@@ -6,6 +6,7 @@ import {
   type PaginatedResult,
 } from "@/lib/pagination";
 import type { Prisma } from "@/generated/prisma/client";
+import { orderNewestExpense } from "@/lib/queries/sort";
 import {
   todayRange,
   thisWeekRange,
@@ -66,7 +67,7 @@ export async function getExpensesPage(
     prisma.expense.count({ where }),
     prisma.expense.findMany({
       where,
-      orderBy: { expenseDate: "desc" },
+      orderBy: orderNewestExpense,
       skip: (page - 1) * pageSize,
       take: pageSize,
       select: expenseSelect,
@@ -82,7 +83,7 @@ export async function getExpenses(
 ): Promise<ExpenseRow[]> {
   return prisma.expense.findMany({
     where: branchId ? { branchId } : undefined,
-    orderBy: { expenseDate: "desc" },
+    orderBy: orderNewestExpense,
     take: limit,
     select: expenseSelect,
   });

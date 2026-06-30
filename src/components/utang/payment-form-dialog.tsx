@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { FieldError } from "@/components/shared/field-error";
 import { formatCurrency } from "@/lib/currency";
-import { toISODate } from "@/lib/dates";
+import { todayISODate } from "@/lib/dates";
 import {
   utangPaymentSchema,
   type UtangPaymentInput,
@@ -50,7 +50,7 @@ export function PaymentFormDialog({
     defaultValues: {
       utangId,
       amount: remaining > 0 ? remaining : 0,
-      date: toISODate(new Date()),
+      date: todayISODate(),
     },
   });
 
@@ -59,7 +59,7 @@ export function PaymentFormDialog({
       reset({
         utangId,
         amount: remaining > 0 ? remaining : 0,
-        date: toISODate(new Date()),
+        date: todayISODate(),
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

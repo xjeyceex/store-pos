@@ -50,7 +50,7 @@ import {
   SearchableItemSelect,
 } from "@/components/sales/searchable-item-select";
 import { formatCurrency, formatNumber, roundMoney } from "@/lib/currency";
-import { formatDate, toISODate } from "@/lib/dates";
+import { formatDateTime, todayISODate } from "@/lib/dates";
 import { fetchBarcodeLookup } from "@/lib/barcode-client";
 import { saleSchema, type SaleInput } from "@/lib/validations/sale";
 import { createSales, deleteSale } from "@/lib/actions/sales";
@@ -67,13 +67,15 @@ import type { SaleRow } from "@/lib/queries/sales";
 
 const CUSTOM = CUSTOM_ITEM;
 
-const defaultValues: z.input<typeof saleSchema> = {
-  productId: "",
-  name: "",
-  unitPrice: 0,
-  quantity: 1,
-  date: toISODate(new Date()),
-};
+function getDefaultSaleValues(): z.input<typeof saleSchema> {
+  return {
+    productId: "",
+    name: "",
+    unitPrice: 0,
+    quantity: 1,
+    date: todayISODate(),
+  };
+}
 
 export function SalesClient({
   products,
@@ -112,13 +114,16 @@ export function SalesClient({
     formState: { errors },
   } = useForm<z.input<typeof saleSchema>, unknown, SaleInput>({
     resolver: zodResolver(saleSchema),
-    defaultValues,
+    defaultValues: getDefaultSaleValues(),
   });
+
+  React.useEffect(() => {
+    setValue("date", todayISODate());
+  }, [setValue]);
 
   const productId = watch("productId");
   const quantity = Number(watch("quantity")) || 0;
   const unitPrice = Number(watch("unitPrice")) || 0;
-  const saleDate = watch("date");
   const isCustom = !productId;
   const selected = products.find((p) => p.id === productId);
 
@@ -135,6 +140,7 @@ export function SalesClient({
     totalPages: salesTotalPages,
     totalItems: salesTotalItems,
     setPage: setSalesPage,
+    reloadFirstPage: reloadSalesFirstPage,
     isPending: salesPending,
   } = useServerPagination(initialSales, fetchSalesPage);
 
@@ -147,7 +153,8 @@ export function SalesClient({
   function clearSale() {
     setCart([]);
     clearPayment();
-    reset(defaultValues);
+    reset(getDefaultSaleValues());
+    setValue("date", todayISODate());
   }
 
   function handleUtangCustomerChange(customerId: string, customerName: string) {
@@ -226,10 +233,7 @@ export function SalesClient({
       });
     }
 
-    reset({
-      ...defaultValues,
-      date: values.date ?? defaultValues.date,
-    });
+    reset(getDefaultSaleValues());
   }
 
   function removeFromCart(key: string) {
@@ -312,7 +316,7 @@ export function SalesClient({
     try {
       const result = await recordSaleAsUtang({
         items: toCartPayload(cart),
-        date: saleDate ?? "",
+        date: todayISODate(),
         customerId: utangCustomerId,
         customerName: utangCustomerName.trim(),
         cashReceived: receivedAmount,
@@ -321,6 +325,8 @@ export function SalesClient({
       if (result.success && result.data?.customerId) {
         toast.success(result.message ?? "Utang recorded");
         clearSale();
+        reloadSalesFirstPage();
+        router.refresh();
         router.push(`/utang/${result.data.customerId}`);
       } else if (!result.success) {
         toast.error(result.error);
@@ -343,12 +349,13 @@ export function SalesClient({
     setCheckoutPending(true);
     try {
       const result = await createSales({
-        date: saleDate ?? "",
+        date: todayISODate(),
         items: toCartPayload(cart),
       });
       if (result.success) {
         toast.success(result.message ?? "Sale recorded");
         clearSale();
+        reloadSalesFirstPage();
         router.refresh();
       } else {
         toast.error(result.error);
@@ -362,6 +369,7 @@ export function SalesClient({
     const result = await deleteSale(id);
     if (result.success) {
       toast.success(result.message ?? "Deleted");
+      reloadSalesFirstPage();
       router.refresh();
     } else toast.error(result.error);
   }
@@ -592,7 +600,7 @@ export function SalesClient({
                   <MobileRecordCard
                     key={s.id}
                     title={s.productName}
-                    subtitle={formatDate(s.saleDate)}
+                    subtitle={formatDateTime(s.saleDate)}
                     fields={[
                       { label: "Qty", value: formatNumber(s.quantity) },
                       {
@@ -646,7 +654,7 @@ export function SalesClient({
                       {sales.map((s) => (
                         <TableRow key={s.id}>
                           <TableCell className="text-muted-foreground">
-                            {formatDate(s.saleDate)}
+                            {formatDateTime(s.saleDate)}
                           </TableCell>
                           <TableCell className="font-medium">
                             {s.productName}

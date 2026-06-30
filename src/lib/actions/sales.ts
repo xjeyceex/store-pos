@@ -243,7 +243,6 @@ export async function createSales(input: SaleCartInput): Promise<ActionResult> {
   }
 
   const d = parsed.data;
-  const saleDate = parseDateInput(d.date);
   const branchId = await getActiveBranchId();
   if (!branchId) return { success: false, error: NO_BRANCH };
 
@@ -253,6 +252,7 @@ export async function createSales(input: SaleCartInput): Promise<ActionResult> {
     await prisma.$transaction(async (tx) => {
       await validateCatalogStock(tx, d.items, branchId);
       for (const item of d.items) {
+        const saleDate = parseDateInput(d.date);
         const created = await processSaleItem(tx, item, saleDate, branchId);
         if (created) productCreated = true;
       }
@@ -264,7 +264,7 @@ export async function createSales(input: SaleCartInput): Promise<ActionResult> {
     };
   }
 
-  await recomputeDailySummary(branchId, saleDate);
+  await recomputeDailySummary(branchId, parseDateInput(d.date));
   revalidateAll();
 
   const count = d.items.length;

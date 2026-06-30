@@ -59,6 +59,31 @@ export function useServerPaginationWithFilters<T, F extends object>(
     [fetchPage, query]
   );
 
+  const reloadFirstPage = React.useCallback(() => {
+    fetchPage(1, query);
+  }, [fetchPage, query]);
+
+  const initialSignature = React.useMemo(
+    () =>
+      `${initial.page}:${initial.totalItems}:${initial.items
+        .map((item) => JSON.stringify(item))
+        .join("|")}`,
+    [initial]
+  );
+
+  // Adopt refreshed server data when viewing page 1 (e.g. after router.refresh).
+  React.useEffect(() => {
+    if (data.page !== 1) return;
+    setData((current) => {
+      if (initial.page !== 1) return current;
+      const currentSig = `${current.page}:${current.totalItems}:${current.items
+        .map((item) => JSON.stringify(item))
+        .join("|")}`;
+      if (currentSig === initialSignature) return current;
+      return initial;
+    });
+  }, [initial, initialSignature, data.page]);
+
   return {
     items: data.items,
     page: data.page,
@@ -69,6 +94,7 @@ export function useServerPaginationWithFilters<T, F extends object>(
     setQuery,
     setPage,
     setData,
+    reloadFirstPage,
     isPending,
   };
 }

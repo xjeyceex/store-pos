@@ -14,6 +14,10 @@ import {
   paginateSlice,
 } from "@/lib/pagination";
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  orderNewestExpense,
+  orderNewestUtang,
+} from "@/lib/queries/sort";
 import type {
   ReportColumn,
   ReportResult,
@@ -343,7 +347,7 @@ async function buildExpenseReportPage(
     prisma.expense.count({ where }),
     prisma.expense.findMany({
       where,
-      orderBy: { expenseDate: "desc" },
+      orderBy: orderNewestExpense,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -401,7 +405,7 @@ async function buildUtangReportPage(
     prisma.utang.findMany({
       where,
       include: { customer: true, payments: true },
-      orderBy: { utangDate: "desc" },
+      orderBy: orderNewestUtang,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatNumber } from "@/lib/currency";
-import { formatDate } from "@/lib/dates";
+import { formatDateTime } from "@/lib/dates";
 import { expenseCategoryLabel, inventoryReasonLabel } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import type {
@@ -96,7 +96,7 @@ export function RecentActivity({
                   key={s.id}
                   primary={s.productName}
                   secondary={withBranch(
-                    `${formatNumber(s.quantity)} pcs • ${formatDate(s.saleDate)}`,
+                    `${formatNumber(s.quantity)} pcs • ${formatDateTime(s.saleDate)}`,
                     s.branchName,
                     showBranch
                   )}
@@ -116,7 +116,7 @@ export function RecentActivity({
                   key={e.id}
                   primary={e.description}
                   secondary={withBranch(
-                    `${expenseCategoryLabel(e.category)} • ${formatDate(e.expenseDate)}`,
+                    `${expenseCategoryLabel(e.category)} • ${formatDateTime(e.expenseDate)}`,
                     e.branchName,
                     showBranch
                   )}
@@ -136,7 +136,7 @@ export function RecentActivity({
                   key={i.id}
                   primary={i.productName}
                   secondary={withBranch(
-                    `${inventoryReasonLabel(i.reason)} • ${formatDate(i.createdAt)}`,
+                    `${inventoryReasonLabel(i.reason)} • ${formatDateTime(i.createdAt)}`,
                     i.branchName,
                     showBranch
                   )}
@@ -162,7 +162,7 @@ export function RecentActivity({
                   key={p.id}
                   primary={p.customerName}
                   secondary={withBranch(
-                    `Utang payment • ${formatDate(p.paymentDate)}`,
+                    `Utang payment • ${formatDateTime(p.paymentDate)}`,
                     p.branchName,
                     showBranch
                   )}

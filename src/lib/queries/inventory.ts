@@ -5,6 +5,7 @@ import {
   type PaginatedResult,
 } from "@/lib/pagination";
 import type { Prisma } from "@/generated/prisma/client";
+import { orderNewestInventoryLog } from "@/lib/queries/sort";
 
 export type InventoryLogRow = {
   id: string;
@@ -60,7 +61,7 @@ export async function getInventoryLogsPage(
     prisma.inventoryLog.count({ where }),
     prisma.inventoryLog.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: orderNewestInventoryLog,
       skip: (page - 1) * pageSize,
       take: pageSize,
       select: logSelect,
@@ -76,7 +77,7 @@ export async function getInventoryLogs(
 ): Promise<InventoryLogRow[]> {
   return prisma.inventoryLog.findMany({
     where: branchId ? { branchId } : undefined,
-    orderBy: { createdAt: "desc" },
+    orderBy: orderNewestInventoryLog,
     take: limit,
     select: logSelect,
   });
