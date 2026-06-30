@@ -8,8 +8,8 @@ import { ensureLocalCerts } from "./ensure-local-certs.mjs";
 import { getLanIp } from "./get-lan-ip.mjs";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-const httpsPort = Number(process.env.PORT ?? 3000);
-const internalPort = Number(process.env.LOCAL_INTERNAL_PORT ?? 3001);
+const httpsPort = Number(process.env.PORT ?? 4000);
+const internalPort = Number(process.env.LOCAL_INTERNAL_PORT ?? 4001);
 
 const { keyPath, certPath } = ensureLocalCerts();
 const lanIp = getLanIp();

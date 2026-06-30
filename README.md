@@ -67,7 +67,7 @@ DATABASE_URL="file:./dev.db"
 | `npm run db:seed`    | Reset and seed the database with sample data        |
 | `npm run db:studio`  | Open Prisma Studio to inspect the database          |
 | `npm run local:setup`| One-time production setup (migrate + build)         |
-| `npm run local:start`| Run production app on your Wi‑Fi (HTTPS, port 3000) |
+| `npm run local:start`| Run production app on your Wi‑Fi (HTTPS, port 4000) |
 | `npm run local`      | Setup then start (first run on a new PC)            |
 | `npm run db:backup`  | Copy `dev.db` into `backups/` with a timestamp     |
 
@@ -90,7 +90,7 @@ That applies migrations, builds the app, and starts it with HTTPS so **barcode s
 npm run local:start
 ```
 
-Then on any device on the same Wi‑Fi, open the URL printed in the terminal (e.g. `https://192.168.1.5:3000`). Accept the browser’s certificate warning once — it’s your own self-signed cert on your own network.
+Then on any device on the same Wi‑Fi, open the URL printed in the terminal (e.g. `https://192.168.1.5:4000`). Accept the browser’s certificate warning once — it’s your own self-signed cert on your own network.
 
 ### Backup your data
 
