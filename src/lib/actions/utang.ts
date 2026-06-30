@@ -367,33 +367,39 @@ export async function recordSaleAsUtang(
     return { success: false, error: "Select a specific branch before making changes." };
   }
 
-  let line: UtangLine;
+  const lines: UtangLine[] = [];
   let total = 0;
 
-  if (d.productId) {
-    const product = await prisma.product.findUnique({ where: { id: d.productId } });
-    if (!product || product.branchId !== branchId) {
-      return { success: false, error: "Product not found." };
+  for (const item of d.items) {
+    if (item.productId) {
+      const product = await prisma.product.findUnique({
+        where: { id: item.productId },
+      });
+      if (!product || product.branchId !== branchId) {
+        return { success: false, error: "Product not found." };
+      }
+      const unitPrice = roundMoney(product.sellingPrice);
+      const lineTotal = roundMoney(unitPrice * item.quantity);
+      lines.push({
+        productId: product.id,
+        name: product.name,
+        quantity: item.quantity,
+        unitPrice,
+        lineTotal,
+      });
+      total = roundMoney(total + lineTotal);
+    } else {
+      const unitPrice = roundMoney(item.unitPrice!);
+      const lineTotal = roundMoney(unitPrice * item.quantity);
+      lines.push({
+        productId: null,
+        name: item.name!.trim(),
+        quantity: item.quantity,
+        unitPrice,
+        lineTotal,
+      });
+      total = roundMoney(total + lineTotal);
     }
-    const unitPrice = roundMoney(product.sellingPrice);
-    total = roundMoney(unitPrice * d.quantity);
-    line = {
-      productId: product.id,
-      name: product.name,
-      quantity: d.quantity,
-      unitPrice,
-      lineTotal: total,
-    };
-  } else {
-    const unitPrice = roundMoney(d.unitPrice!);
-    total = roundMoney(unitPrice * d.quantity);
-    line = {
-      productId: null,
-      name: d.name!.trim(),
-      quantity: d.quantity,
-      unitPrice,
-      lineTotal: total,
-    };
   }
 
   if (total <= 0) {
@@ -428,7 +434,7 @@ export async function recordSaleAsUtang(
         customerId: customer.id,
         utangDate,
         notes: cashReceived > 0 ? `Partial cash: ${cashReceived}` : null,
-        lines: [line],
+        lines,
         initialPayment: cashReceived,
       });
       summaryBranchId = bid;

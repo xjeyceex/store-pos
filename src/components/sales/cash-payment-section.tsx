@@ -60,7 +60,7 @@ export function CashPaymentSection({
 
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
         <div className="grid gap-2">
-          <Label htmlFor="cash-received">Cash received</Label>
+          <Label htmlFor="cash-received">Amount paid</Label>
           <Input
             id="cash-received"
             className="h-11 text-lg font-medium tabular-nums"
@@ -85,19 +85,6 @@ export function CashPaymentSection({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-        <span className="text-muted-foreground">
-          Total due:{" "}
-          <span className="font-medium tabular-nums text-foreground">
-            {formatCurrency(total, currency)}
-          </span>
-        </span>
-
-        {insufficient ? (
-          <span className="font-medium text-destructive tabular-nums">
-            Short {formatCurrency(Math.abs(change), currency)}
-          </span>
-        ) : null}
-
         {canShowChange ? (
           <span className="font-semibold tabular-nums">
             <span className="font-normal text-muted-foreground">Change: </span>
@@ -105,7 +92,13 @@ export function CashPaymentSection({
               {formatCurrency(change, currency)}
             </span>
           </span>
-        ) : null}
+        ) : insufficient ? (
+          <span className="font-medium text-destructive tabular-nums">
+            Short {formatCurrency(Math.abs(change), currency)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Enter amount paid</span>
+        )}
       </div>
 
       {insufficient && onRecordUtang && onUtangCustomerChange ? (

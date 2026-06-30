@@ -1,7 +1,13 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { saleSchema, type SaleInput } from "@/lib/validations/sale";
+import {
+  saleSchema,
+  saleCartSchema,
+  type SaleInput,
+  type SaleCartInput,
+  type SaleCartItemInput,
+} from "@/lib/validations/sale";
 import { roundMoney } from "@/lib/currency";
 import { parseDateInput } from "@/lib/dates";
 import { getActiveBranchId } from "@/lib/queries/branches";
@@ -14,8 +20,10 @@ import type { Product } from "@/generated/prisma/client";
 
 const NO_BRANCH = "Select a specific branch before making changes.";
 
+type Tx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
 async function resolveProductForSale(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: Tx,
   d: SaleInput,
   branchId: string
 ): Promise<{ product: Product; created: boolean }> {
@@ -71,73 +79,8 @@ async function resolveProductForSale(
   return { product, created: true };
 }
 
-export async function createSale(input: SaleInput): Promise<ActionResult> {
-  const parsed = saleSchema.safeParse(input);
-  if (!parsed.success) {
-    return {
-      success: false,
-      error: "Please fix the highlighted fields.",
-      fieldErrors: fieldErrorsFromZod(parsed.error),
-    };
-  }
-  const d = parsed.data;
-  const saleDate = parseDateInput(d.date);
-  let branchId: string | null = null;
-  let productCreated = false;
-
-  try {
-    await prisma.$transaction(async (tx) => {
-      if (d.productId) {
-        const product = await tx.product.findUnique({
-          where: { id: d.productId },
-        });
-        if (!product) throw new Error("Product not found.");
-        branchId = product.branchId;
-
-        if (product.currentStock < d.quantity) {
-          throw new Error(
-            `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
-          );
-        }
-
-        await recordSale(tx, product, d.quantity, saleDate);
-        return;
-      }
-
-      branchId = await getActiveBranchId();
-      if (!branchId) throw new Error(NO_BRANCH);
-
-      const resolved = await resolveProductForSale(tx, d, branchId);
-      productCreated = resolved.created;
-      const { product } = resolved;
-
-      if (!resolved.created && product.currentStock < d.quantity) {
-        throw new Error(
-          `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
-        );
-      }
-
-      await recordSale(tx, product, d.quantity, saleDate);
-    });
-  } catch (e) {
-    return {
-      success: false,
-      error: e instanceof Error ? e.message : "Failed to record sale.",
-    };
-  }
-
-  if (branchId) await recomputeDailySummary(branchId, saleDate);
-  revalidateAll();
-  return {
-    success: true,
-    message: productCreated
-      ? "Sale recorded and product added to catalog."
-      : "Sale recorded.",
-  };
-}
-
 async function recordSale(
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  tx: Tx,
   product: Product,
   quantity: number,
   saleDate: Date
@@ -186,6 +129,153 @@ async function recordSale(
   });
 }
 
+function toSaleInput(item: SaleCartItemInput, date?: string): SaleInput {
+  if (item.productId) {
+    return {
+      productId: item.productId,
+      quantity: item.quantity,
+      date,
+    };
+  }
+  return {
+    name: item.name,
+    unitPrice: item.unitPrice,
+    quantity: item.quantity,
+    date,
+  };
+}
+
+async function validateCatalogStock(
+  tx: Tx,
+  items: SaleCartItemInput[],
+  branchId: string
+) {
+  const neededByProduct = new Map<string, number>();
+  for (const item of items) {
+    if (!item.productId) continue;
+    neededByProduct.set(
+      item.productId,
+      (neededByProduct.get(item.productId) ?? 0) + item.quantity
+    );
+  }
+
+  for (const [productId, needed] of neededByProduct) {
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product || product.branchId !== branchId) {
+      throw new Error("Product not found.");
+    }
+    if (product.currentStock < needed) {
+      throw new Error(
+        `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
+      );
+    }
+  }
+}
+
+async function processSaleItem(
+  tx: Tx,
+  item: SaleCartItemInput,
+  saleDate: Date,
+  branchId: string
+): Promise<boolean> {
+  const d = toSaleInput(item);
+
+  if (d.productId) {
+    const product = await tx.product.findUnique({ where: { id: d.productId } });
+    if (!product) throw new Error("Product not found.");
+    if (product.currentStock < d.quantity) {
+      throw new Error(
+        `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
+      );
+    }
+    await recordSale(tx, product, d.quantity, saleDate);
+    return false;
+  }
+
+  const resolved = await resolveProductForSale(tx, d, branchId);
+  const { product, created } = resolved;
+
+  if (!created && product.currentStock < d.quantity) {
+    throw new Error(
+      `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
+    );
+  }
+
+  await recordSale(tx, product, d.quantity, saleDate);
+  return created;
+}
+
+export async function createSale(input: SaleInput): Promise<ActionResult> {
+  const parsed = saleSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  return createSales({
+    date: parsed.data.date,
+    items: [
+      parsed.data.productId
+        ? {
+            productId: parsed.data.productId,
+            quantity: parsed.data.quantity,
+          }
+        : {
+            name: parsed.data.name!.trim(),
+            unitPrice: parsed.data.unitPrice!,
+            quantity: parsed.data.quantity,
+          },
+    ],
+  });
+}
+
+export async function createSales(input: SaleCartInput): Promise<ActionResult> {
+  const parsed = saleCartSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+
+  const d = parsed.data;
+  const saleDate = parseDateInput(d.date);
+  const branchId = await getActiveBranchId();
+  if (!branchId) return { success: false, error: NO_BRANCH };
+
+  let productCreated = false;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      await validateCatalogStock(tx, d.items, branchId);
+      for (const item of d.items) {
+        const created = await processSaleItem(tx, item, saleDate, branchId);
+        if (created) productCreated = true;
+      }
+    });
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Failed to record sale.",
+    };
+  }
+
+  await recomputeDailySummary(branchId, saleDate);
+  revalidateAll();
+
+  const count = d.items.length;
+  return {
+    success: true,
+    message: productCreated
+      ? `${count} sale${count === 1 ? "" : "s"} recorded. New product added to catalog.`
+      : `${count} sale${count === 1 ? "" : "s"} recorded.`,
+  };
+}
+
 export async function deleteSale(id: string): Promise<ActionResult> {
   const sale = await prisma.sale.findUnique({ where: { id } });
   if (!sale) {
@@ -194,7 +284,6 @@ export async function deleteSale(id: string): Promise<ActionResult> {
 
   try {
     await prisma.$transaction(async (tx) => {
-      // Restore stock if the product still exists.
       if (sale.productId) {
         const product = await tx.product.findUnique({
           where: { id: sale.productId },
