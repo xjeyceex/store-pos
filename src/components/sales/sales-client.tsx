@@ -34,6 +34,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  DesktopTable,
+  MobileRecordCard,
+  MobileRecordList,
+} from "@/components/shared/mobile-record-card";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FieldError } from "@/components/shared/field-error";
 import {
@@ -400,8 +405,52 @@ export function SalesClient({
             description="Recorded sales will appear here."
           />
         ) : (
-          <Card className="p-0">
-            <Table>
+          <>
+            <MobileRecordList>
+              {sales.map((s) => (
+                <MobileRecordCard
+                  key={s.id}
+                  title={s.productName}
+                  subtitle={formatDate(s.saleDate)}
+                  fields={[
+                    { label: "Qty", value: formatNumber(s.quantity) },
+                    {
+                      label: "Revenue",
+                      value: formatCurrency(s.revenue, currency),
+                    },
+                    {
+                      label: "Profit",
+                      value: (
+                        <span className="text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(s.grossProfit, currency)}
+                        </span>
+                      ),
+                    },
+                  ]}
+                  actions={
+                    <ConfirmDialog
+                      title="Delete sale?"
+                      description="This restores the sold stock and removes the sale."
+                      onConfirm={() => handleDelete(s.id)}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-10"
+                          aria-label="Delete sale"
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      }
+                    />
+                  }
+                />
+              ))}
+            </MobileRecordList>
+
+            <DesktopTable>
+              <Card className="p-0">
+                <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
@@ -449,8 +498,10 @@ export function SalesClient({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
-          </Card>
+                </Table>
+              </Card>
+            </DesktopTable>
+          </>
         )}
       </div>
 

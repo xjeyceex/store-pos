@@ -27,6 +27,11 @@ import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { ExpenseFormDialog } from "@/components/expenses/expense-form-dialog";
+import {
+  DesktopTable,
+  MobileRecordCard,
+  MobileRecordList,
+} from "@/components/shared/mobile-record-card";
 import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/dates";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/constants";
@@ -110,7 +115,7 @@ export function ExpensesClient({
           </div>
           <ExpenseFormDialog
             trigger={
-              <Button>
+              <Button className="w-full sm:w-auto">
                 <Plus className="size-4" />
                 Add Expense
               </Button>
@@ -129,8 +134,64 @@ export function ExpensesClient({
             }
           />
         ) : (
-          <Card className="p-0">
-            <Table>
+          <>
+            <MobileRecordList>
+              {filtered.map((e) => (
+                <MobileRecordCard
+                  key={e.id}
+                  title={e.description}
+                  subtitle={formatDate(e.expenseDate)}
+                  badge={
+                    <Badge variant="secondary">
+                      {expenseCategoryLabel(e.category)}
+                    </Badge>
+                  }
+                  fields={[
+                    {
+                      label: "Amount",
+                      value: formatCurrency(e.amount, currency),
+                      className: "col-span-2",
+                    },
+                  ]}
+                  actions={
+                    <>
+                      <ExpenseFormDialog
+                        expense={e}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-10"
+                            aria-label="Edit expense"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                        }
+                      />
+                      <ConfirmDialog
+                        title="Delete expense?"
+                        description={`"${e.description}" will be removed.`}
+                        onConfirm={() => handleDelete(e.id)}
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-10"
+                            aria-label="Delete expense"
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        }
+                      />
+                    </>
+                  }
+                />
+              ))}
+            </MobileRecordList>
+
+            <DesktopTable>
+              <Card className="p-0">
+                <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Date</TableHead>
@@ -188,8 +249,10 @@ export function ExpensesClient({
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
-          </Card>
+                </Table>
+              </Card>
+            </DesktopTable>
+          </>
         )}
       </div>
     </div>

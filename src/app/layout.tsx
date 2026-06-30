@@ -25,6 +25,12 @@ export const metadata: Metadata = {
     "Simple inventory, sales, profit, expense, and utang tracker for a sari-sari store.",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{

@@ -27,20 +27,25 @@ export function MobileNav({
   const [open, setOpen] = React.useState(false);
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur md:hidden">
+    <header className="safe-top sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/95 px-3 backdrop-blur supports-backdrop-filter:bg-background/80 md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger
           render={
-            <Button variant="outline" size="icon" aria-label="Open menu" />
+            <Button
+              variant="outline"
+              size="icon"
+              className="size-10 shrink-0"
+              aria-label="Open menu"
+            />
           }
         >
           <Menu className="size-5" />
         </SheetTrigger>
-        <SheetContent side="left" className="w-72 p-0">
-          <SheetHeader className="border-b">
-            <SheetTitle className="flex items-center gap-2">
+        <SheetContent side="left" className="w-[min(100vw-2rem,18rem)] p-0">
+          <SheetHeader className="border-b px-4 py-3">
+            <SheetTitle className="flex items-center gap-2 text-base">
               <Store className="size-5 text-primary" />
-              {storeName}
+              <span className="truncate">{storeName}</span>
             </SheetTitle>
           </SheetHeader>
           <div className="border-b p-3">
@@ -52,9 +57,6 @@ export function MobileNav({
       <div className="flex min-w-0 flex-1 items-center gap-2 font-semibold">
         <Store className="size-5 shrink-0 text-primary" />
         <span className="truncate">{storeName}</span>
-      </div>
-      <div className="min-w-0 flex-1 sm:max-w-48">
-        <BranchSwitcher branches={branches} selected={selectedBranch} />
       </div>
     </header>
   );

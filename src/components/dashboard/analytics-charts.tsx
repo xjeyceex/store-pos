@@ -131,9 +131,9 @@ export function AnalyticsCharts({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-lg font-semibold">Analytics</h2>
-        <div className={cn(isPending && "pointer-events-none opacity-60")}>
+        <div className={cn("w-full sm:w-auto", isPending && "pointer-events-none opacity-60")}>
           <RangeFilter value={range} onChange={handleRangeChange} />
         </div>
       </div>

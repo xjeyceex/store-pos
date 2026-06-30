@@ -25,8 +25,8 @@ export function RangeFilter({
   onChange: (value: RangeValue) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <div className="grid gap-1.5">
+    <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:items-end">
+      <div className="grid w-full gap-1.5 sm:w-auto">
         <Label className="text-xs text-muted-foreground">Period</Label>
         <Select
           value={value.preset}
@@ -35,7 +35,7 @@ export function RangeFilter({
           }
           items={RANGE_PRESETS.map((p) => ({ value: p.value, label: p.label }))}
         >
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-full sm:w-44">
             <SelectValue placeholder="Select period" />
           </SelectTrigger>
           <SelectContent>
@@ -50,20 +50,20 @@ export function RangeFilter({
 
       {value.preset === "CUSTOM" ? (
         <>
-          <div className="grid gap-1.5">
+          <div className="grid w-full gap-1.5 sm:w-auto">
             <Label className="text-xs text-muted-foreground">From</Label>
             <Input
               type="date"
-              className="w-40"
+              className="w-full sm:w-40"
               value={value.from}
               onChange={(e) => onChange({ ...value, from: e.target.value })}
             />
           </div>
-          <div className="grid gap-1.5">
+          <div className="grid w-full gap-1.5 sm:w-auto">
             <Label className="text-xs text-muted-foreground">To</Label>
             <Input
               type="date"
-              className="w-40"
+              className="w-full sm:w-40"
               value={value.to}
               onChange={(e) => onChange({ ...value, to: e.target.value })}
             />

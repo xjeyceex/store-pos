@@ -19,6 +19,11 @@ import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CustomerFormDialog } from "@/components/utang/customer-form-dialog";
 import { UtangFormDialog } from "@/components/utang/utang-form-dialog";
+import {
+  DesktopTable,
+  MobileRecordCard,
+  MobileRecordList,
+} from "@/components/shared/mobile-record-card";
 import { formatCurrency } from "@/lib/currency";
 import type { CustomerRow } from "@/lib/queries/utang";
 import type { ProductOption } from "@/lib/queries/products";
@@ -75,10 +80,10 @@ export function UtangClient({
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <CustomerFormDialog
             trigger={
-              <Button variant="outline">
+              <Button variant="outline" className="w-full sm:w-auto">
                 <UserPlus className="size-4" />
                 Add Customer
               </Button>
@@ -89,7 +94,10 @@ export function UtangClient({
             products={products}
             currency={currency}
             trigger={
-              <Button disabled={customerOptions.length === 0}>
+              <Button
+                className="w-full sm:w-auto"
+                disabled={customerOptions.length === 0}
+              >
                 <Plus className="size-4" />
                 Add Utang
               </Button>
@@ -109,8 +117,61 @@ export function UtangClient({
           }
         />
       ) : (
-        <Card className="p-0">
-          <Table>
+        <>
+          <MobileRecordList>
+            {filtered.map((c) => (
+              <MobileRecordCard
+                key={c.id}
+                title={
+                  <Link href={`/utang/${c.id}`} className="hover:underline">
+                    {c.name}
+                  </Link>
+                }
+                subtitle={c.phone ?? "No phone"}
+                fields={[
+                  {
+                    label: "Balance",
+                    value: (
+                      <span
+                        className={
+                          c.balance > 0
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-emerald-600 dark:text-emerald-400"
+                        }
+                      >
+                        {formatCurrency(c.balance, currency)}
+                      </span>
+                    ),
+                  },
+                  { label: "Open", value: c.openCount },
+                  {
+                    label: "Total Utang",
+                    value: formatCurrency(c.totalUtang, currency),
+                  },
+                  {
+                    label: "Paid",
+                    value: formatCurrency(c.totalPaid, currency),
+                  },
+                ]}
+                actions={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-10"
+                    aria-label="View customer"
+                    nativeButton={false}
+                    render={<Link href={`/utang/${c.id}`} />}
+                  >
+                    <ChevronRight className="size-4" />
+                  </Button>
+                }
+              />
+            ))}
+          </MobileRecordList>
+
+          <DesktopTable>
+            <Card className="p-0">
+              <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Customer</TableHead>
@@ -166,8 +227,10 @@ export function UtangClient({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </Card>
+              </Table>
+            </Card>
+          </DesktopTable>
+        </>
       )}
     </div>
   );

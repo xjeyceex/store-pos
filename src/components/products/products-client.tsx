@@ -25,6 +25,11 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { StockStatusBadge } from "@/components/shared/status-badges";
+import {
+  DesktopTable,
+  MobileRecordCard,
+  MobileRecordList,
+} from "@/components/shared/mobile-record-card";
 import { ProductFormDialog } from "@/components/products/product-form-dialog";
 import { formatCurrency, formatNumber } from "@/lib/currency";
 import { deleteProduct } from "@/lib/actions/products";
@@ -102,7 +107,7 @@ export function ProductsClient({
           currency={currency}
           defaultMinStock={defaultMinStock}
           trigger={
-            <Button>
+            <Button className="w-full sm:w-auto">
               <Plus className="size-4" />
               Add Product
             </Button>
@@ -121,8 +126,74 @@ export function ProductsClient({
           }
         />
       ) : (
-        <Card className="p-0">
-          <Table>
+        <>
+          <MobileRecordList>
+            {filtered.map((p) => (
+              <MobileRecordCard
+                key={p.id}
+                title={p.name}
+                subtitle={p.categoryName ?? "Uncategorized"}
+                badge={<StockStatusBadge status={p.stockStatus} />}
+                fields={[
+                  {
+                    label: "Price",
+                    value: formatCurrency(p.sellingPrice, currency),
+                  },
+                  {
+                    label: "Stock",
+                    value: formatNumber(p.currentStock),
+                  },
+                  {
+                    label: "Cost",
+                    value: formatCurrency(p.costPrice, currency),
+                  },
+                  {
+                    label: "Profit/Item",
+                    value: formatCurrency(p.profitPerItem, currency),
+                  },
+                ]}
+                actions={
+                  <>
+                    <ProductFormDialog
+                      product={p}
+                      categories={categories}
+                      currency={currency}
+                      defaultMinStock={defaultMinStock}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-10"
+                          aria-label="Edit product"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                      }
+                    />
+                    <ConfirmDialog
+                      title="Delete product?"
+                      description={`"${p.name}" will be removed. Past sales history is kept.`}
+                      onConfirm={() => handleDelete(p.id)}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-10"
+                          aria-label="Delete product"
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      }
+                    />
+                  </>
+                }
+              />
+            ))}
+          </MobileRecordList>
+
+          <DesktopTable>
+            <Card className="p-0">
+              <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
@@ -197,8 +268,10 @@ export function ProductsClient({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </Card>
+            </Table>
+          </Card>
+        </DesktopTable>
+        </>
       )}
     </div>
   );

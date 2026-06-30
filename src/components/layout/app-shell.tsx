@@ -36,13 +36,13 @@ export function AppShell({
       </aside>
 
       {/* Main column */}
-      <div className="flex min-h-screen flex-col md:pl-60">
+      <div className="flex min-h-screen flex-col safe-x md:pl-60">
         <MobileNav
           storeName={storeName}
           branches={branches}
           selectedBranch={selectedBranch}
         />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+        <main className="safe-bottom flex-1 p-3 sm:p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

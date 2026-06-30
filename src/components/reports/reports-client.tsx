@@ -104,15 +104,15 @@ export function ReportsClient({
   return (
     <div className="space-y-4">
       <Card>
-        <CardContent className="flex flex-wrap items-end gap-3">
-          <div className="grid gap-1.5">
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="grid w-full gap-1.5 sm:w-auto">
             <Label className="text-xs text-muted-foreground">Report Type</Label>
             <Select
               value={type}
               onValueChange={handleTypeChange}
               items={REPORT_TYPES.map((r) => ({ value: r.value, label: r.label }))}
             >
-              <SelectTrigger className="w-56">
+              <SelectTrigger className="w-full sm:w-56">
                 <SelectValue placeholder="Select report" />
               </SelectTrigger>
               <SelectContent>
@@ -126,16 +126,17 @@ export function ReportsClient({
           </div>
 
           {isInventory ? (
-            <p className="pb-2 text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground sm:pb-2">
               Inventory report reflects current stock (no date filter).
             </p>
           ) : (
             <RangeFilter value={range} onChange={handleRangeChange} />
           )}
 
-          <div className="ml-auto pb-0.5">
+          <div className="w-full sm:ml-auto sm:w-auto sm:pb-0.5">
             <Button
               variant="outline"
+              className="w-full sm:w-auto"
               onClick={handleExport}
               disabled={result.rows.length === 0 || isPending}
             >

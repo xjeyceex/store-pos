@@ -14,12 +14,12 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between",
+        "mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between",
         className
       )}
     >
-      <div className="space-y-1">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+      <div className="min-w-0 space-y-1">
+        <h1 className="font-heading text-xl font-semibold tracking-tight sm:text-2xl">
           {title}
         </h1>
         {description ? (
@@ -27,7 +27,9 @@ export function PageHeader({
         ) : null}
       </div>
       {children ? (
-        <div className="flex flex-wrap items-center gap-2">{children}</div>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+          {children}
+        </div>
       ) : null}
     </div>
   );

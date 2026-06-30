@@ -189,7 +189,7 @@ export function ProductFormDialog({
               <FieldError message={errors.categoryName?.message} />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="costPrice">Cost Price</Label>
                 <Input
@@ -229,7 +229,7 @@ export function ProductFormDialog({
               </span>
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="grid gap-2">
                 <Label htmlFor="currentStock">Current Stock</Label>
                 <Input

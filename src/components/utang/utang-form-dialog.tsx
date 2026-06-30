@@ -247,7 +247,7 @@ export function UtangFormDialog({
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+                    <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
                       <div className="grid gap-1">
                         <Label className="text-xs text-muted-foreground">
                           Qty
@@ -305,7 +305,7 @@ export function UtangFormDialog({
             </Button>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="grid gap-2">
               <Label htmlFor="utang-date">Date</Label>
               <Input id="utang-date" type="date" {...register("date")} />

@@ -21,6 +21,11 @@ import {
 } from "@/components/ui/table";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/empty-state";
+import {
+  DesktopTable,
+  MobileRecordCard,
+  MobileRecordList,
+} from "@/components/shared/mobile-record-card";
 import { formatDateTime } from "@/lib/dates";
 import { formatNumber } from "@/lib/currency";
 import { INVENTORY_REASONS, inventoryReasonLabel } from "@/lib/constants";
@@ -85,8 +90,51 @@ export function InventoryHistoryClient({
           description="Stock changes from sales, restocks, and adjustments will appear here."
         />
       ) : (
-        <Card className="p-0">
-          <Table>
+        <>
+          <MobileRecordList>
+            {filtered.map((l) => (
+              <MobileRecordCard
+                key={l.id}
+                title={l.productName}
+                subtitle={formatDateTime(l.createdAt)}
+                badge={
+                  <span className="text-xs font-medium">
+                    {inventoryReasonLabel(l.reason)}
+                  </span>
+                }
+                fields={[
+                  { label: "Before", value: formatNumber(l.quantityBefore) },
+                  {
+                    label: "Change",
+                    value: (
+                      <span
+                        className={cn(
+                          l.quantityChange > 0
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : l.quantityChange < 0
+                              ? "text-destructive"
+                              : "text-muted-foreground"
+                        )}
+                      >
+                        {l.quantityChange > 0 ? "+" : ""}
+                        {formatNumber(l.quantityChange)}
+                      </span>
+                    ),
+                  },
+                  { label: "After", value: formatNumber(l.quantityAfter) },
+                  {
+                    label: "Note",
+                    value: l.note ?? "—",
+                    className: "col-span-2",
+                  },
+                ]}
+              />
+            ))}
+          </MobileRecordList>
+
+          <DesktopTable>
+            <Card className="p-0">
+              <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Date</TableHead>
@@ -131,8 +179,10 @@ export function InventoryHistoryClient({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </Card>
+              </Table>
+            </Card>
+          </DesktopTable>
+        </>
       )}
     </div>
   );
