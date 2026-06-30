@@ -33,9 +33,12 @@ import {
 } from "@/components/ui/table";
 import { RangeFilter, type RangeValue } from "@/components/shared/range-filter";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PaginationControls } from "@/components/shared/pagination-controls";
 import { fetchAnalytics } from "@/lib/actions/analytics";
+import { fetchProductPerformancePage } from "@/lib/actions/lists";
 import { formatCurrency, formatNumber } from "@/lib/currency";
-import type { AnalyticsData } from "@/lib/queries/analytics";
+import type { AnalyticsData, ProductPerformance } from "@/lib/queries/analytics";
+import type { PaginatedResult } from "@/lib/pagination";
 import { cn } from "@/lib/utils";
 
 const CHART_COLORS = [
@@ -84,27 +87,51 @@ function ChartCard({
 
 export function AnalyticsCharts({
   initial,
+  initialProductPerformance,
   currency,
   initialRange,
 }: {
   initial: AnalyticsData;
+  initialProductPerformance: PaginatedResult<ProductPerformance>;
   currency: string;
   initialRange: RangeValue;
 }) {
   const [range, setRange] = useState<RangeValue>(initialRange);
   const [data, setData] = useState<AnalyticsData>(initial);
+  const [productPerf, setProductPerf] = useState(initialProductPerformance);
   const [isPending, startTransition] = useTransition();
+
+  function loadProductPage(nextRange: RangeValue, page: number) {
+    startTransition(async () => {
+      const perf = await fetchProductPerformancePage({
+        preset: nextRange.preset,
+        from: nextRange.from || null,
+        to: nextRange.to || null,
+        page,
+      });
+      setProductPerf(perf);
+    });
+  }
 
   function handleRangeChange(next: RangeValue) {
     setRange(next);
     if (next.preset === "CUSTOM" && (!next.from || !next.to)) return;
     startTransition(async () => {
-      const result = await fetchAnalytics({
-        preset: next.preset,
-        from: next.from || null,
-        to: next.to || null,
-      });
+      const [result, perf] = await Promise.all([
+        fetchAnalytics({
+          preset: next.preset,
+          from: next.from || null,
+          to: next.to || null,
+        }),
+        fetchProductPerformancePage({
+          preset: next.preset,
+          from: next.from || null,
+          to: next.to || null,
+          page: 1,
+        }),
+      ]);
       setData(result);
+      setProductPerf(perf);
     });
   }
 
@@ -123,11 +150,6 @@ export function AnalyticsCharts({
   );
   const hasTop = data.topProducts.length > 0;
   const hasTrend = data.inventoryTrend.length > 0;
-
-  const ranked = [...data.productPerformance].sort(
-    (a, b) => b.quantitySold - a.quantitySold
-  );
-  const soldProducts = ranked.filter((p) => p.quantitySold > 0);
 
   return (
     <div className="space-y-4">
@@ -248,7 +270,7 @@ export function AnalyticsCharts({
           <CardTitle className="text-base">Product Performance</CardTitle>
         </CardHeader>
         <CardContent>
-          {soldProducts.length === 0 ? (
+          {productPerf.totalItems === 0 ? (
             <div className="flex h-32 items-center justify-center">
               <EmptyState
                 title="No product sales"
@@ -256,6 +278,7 @@ export function AnalyticsCharts({
               />
             </div>
           ) : (
+            <>
             <div className="max-h-96 overflow-auto rounded-lg border">
               <Table>
                 <TableHeader>
@@ -268,10 +291,10 @@ export function AnalyticsCharts({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {soldProducts.map((p, i) => (
+                  {productPerf.items.map((p, i) => (
                     <TableRow key={p.productId ?? p.name}>
                       <TableCell className="text-muted-foreground">
-                        {i + 1}
+                        {(productPerf.page - 1) * productPerf.pageSize + i + 1}
                       </TableCell>
                       <TableCell className="font-medium">{p.name}</TableCell>
                       <TableCell className="text-right tabular-nums">
@@ -288,6 +311,15 @@ export function AnalyticsCharts({
                 </TableBody>
               </Table>
             </div>
+            <PaginationControls
+              page={productPerf.page}
+              totalPages={productPerf.totalPages}
+              totalItems={productPerf.totalItems}
+              pageSize={productPerf.pageSize}
+              onPageChange={(page) => loadProductPage(range, page)}
+              className="border-t-0 pt-0"
+            />
+            </>
           )}
         </CardContent>
       </Card>

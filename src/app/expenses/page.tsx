@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { ExpensesClient } from "@/components/expenses/expenses-client";
 import { BranchScopeNotice } from "@/components/layout/branch-scope-notice";
-import { getExpenses, getExpenseTotals } from "@/lib/queries/expenses";
+import { getExpensesPage, getExpenseTotals } from "@/lib/queries/expenses";
 import { getCurrency } from "@/lib/queries/settings";
 import { getBranchContext } from "@/lib/queries/branches";
 
@@ -23,7 +23,7 @@ export default async function ExpensesPage() {
   }
 
   const [expenses, totals, currency] = await Promise.all([
-    getExpenses(ctx.branchId),
+    getExpensesPage(ctx.branchId, { page: 1 }),
     getExpenseTotals(ctx.branchId),
     getCurrency(),
   ]);
@@ -34,7 +34,7 @@ export default async function ExpensesPage() {
         title="Expenses"
         description={`Expenses for ${ctx.branchName}.`}
       />
-      <ExpensesClient expenses={expenses} totals={totals} currency={currency} />
+      <ExpensesClient initial={expenses} totals={totals} currency={currency} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { CustomerDetailClient } from "@/components/utang/customer-detail-client";
-import { getCustomerDetail } from "@/lib/queries/utang";
+import { getCustomerSummary, getCustomerUtangsPage } from "@/lib/queries/utang";
 import { getProductOptions } from "@/lib/queries/products";
 import { getCurrency } from "@/lib/queries/settings";
 import { getActiveBranchId } from "@/lib/queries/branches";
@@ -18,8 +18,9 @@ export default async function CustomerDetailPage({
 }) {
   const { customerId } = await params;
   const branchId = await getActiveBranchId();
-  const [customer, products, currency] = await Promise.all([
-    getCustomerDetail(customerId),
+  const [customer, initialUtangs, products, currency] = await Promise.all([
+    getCustomerSummary(customerId),
+    getCustomerUtangsPage(customerId, { page: 1 }),
     getProductOptions(branchId),
     getCurrency(),
   ]);
@@ -40,6 +41,7 @@ export default async function CustomerDetailPage({
       </Button>
       <CustomerDetailClient
         customer={customer}
+        initialUtangs={initialUtangs}
         products={products}
         currency={currency}
       />

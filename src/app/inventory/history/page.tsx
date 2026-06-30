@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { InventoryHistoryClient } from "@/components/inventory/inventory-history-client";
 import { BranchScopeNotice } from "@/components/layout/branch-scope-notice";
-import { getInventoryLogs } from "@/lib/queries/inventory";
+import { getInventoryLogsPage } from "@/lib/queries/inventory";
 import { getBranchContext } from "@/lib/queries/branches";
 
 export const dynamic = "force-dynamic";
@@ -25,7 +25,7 @@ export default async function InventoryHistoryPage() {
     );
   }
 
-  const logs = await getInventoryLogs(ctx.branchId);
+  const logs = await getInventoryLogsPage(ctx.branchId, { page: 1 });
 
   return (
     <div>
@@ -38,7 +38,7 @@ export default async function InventoryHistoryPage() {
           Back to Inventory
         </Button>
       </PageHeader>
-      <InventoryHistoryClient logs={logs} />
+      <InventoryHistoryClient initial={logs} />
     </div>
   );
 }

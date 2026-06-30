@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { ProductsClient } from "@/components/products/products-client";
 import { BranchScopeNotice } from "@/components/layout/branch-scope-notice";
-import { getProducts, getCategories } from "@/lib/queries/products";
+import { getProductsPage, getCategories } from "@/lib/queries/products";
 import { getSettings } from "@/lib/queries/settings";
 import { getBranchContext } from "@/lib/queries/branches";
 
@@ -23,7 +23,7 @@ export default async function ProductsPage() {
   }
 
   const [products, categories, settings] = await Promise.all([
-    getProducts(ctx.branchId),
+    getProductsPage(ctx.branchId, { page: 1 }),
     getCategories(),
     getSettings(),
   ]);
@@ -35,7 +35,7 @@ export default async function ProductsPage() {
         description={`Products, prices, and stock for ${ctx.branchName}.`}
       />
       <ProductsClient
-        products={products}
+        initial={products}
         categories={categories.map((c) => c.name)}
         currency={settings.currency}
         defaultMinStock={settings.defaultLowStockThreshold}

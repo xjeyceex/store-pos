@@ -19,13 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Table,
   TableBody,
   TableCell,
@@ -39,6 +32,10 @@ import {
   MobileRecordCard,
   MobileRecordList,
 } from "@/components/shared/mobile-record-card";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { useServerPagination } from "@/components/shared/use-server-pagination";
+import { fetchSalesPage } from "@/lib/actions/lists";
+import type { PaginatedResult } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FieldError } from "@/components/shared/field-error";
 import {
@@ -46,16 +43,22 @@ import {
   ScanBarcodeButton,
 } from "@/components/barcode/barcode-scanner-dialog";
 import { QuickAddAndSellDialog } from "@/components/sales/quick-add-and-sell-dialog";
-import { formatCurrency, formatNumber } from "@/lib/currency";
+import { CashPaymentSection } from "@/components/sales/cash-payment-section";
+import {
+  CUSTOM_ITEM,
+  SearchableItemSelect,
+} from "@/components/sales/searchable-item-select";
+import { formatCurrency, formatNumber, roundMoney } from "@/lib/currency";
 import { formatDate, toISODate } from "@/lib/dates";
 import { fetchBarcodeLookup } from "@/lib/barcode-client";
 import { saleSchema, type SaleInput } from "@/lib/validations/sale";
 import { createSale, deleteSale } from "@/lib/actions/sales";
+import { recordSaleAsUtang } from "@/lib/actions/utang";
 import type { BarcodeLookupResult } from "@/lib/barcode-meta";
 import type { ProductOption } from "@/lib/queries/products";
 import type { SaleRow } from "@/lib/queries/sales";
 
-const CUSTOM = "__custom__";
+const CUSTOM = CUSTOM_ITEM;
 
 const defaultValues: z.input<typeof saleSchema> = {
   productId: "",
@@ -67,12 +70,14 @@ const defaultValues: z.input<typeof saleSchema> = {
 
 export function SalesClient({
   products,
-  sales,
+  initialSales,
+  customers,
   currency,
   defaultMinStock = 5,
 }: {
   products: ProductOption[];
-  sales: SaleRow[];
+  initialSales: PaginatedResult<SaleRow>;
+  customers: { id: string; name: string }[];
   currency: string;
   defaultMinStock?: number;
 }) {
@@ -83,6 +88,10 @@ export function SalesClient({
   const [quickAddLookup, setQuickAddLookup] =
     React.useState<BarcodeLookupResult | null>(null);
   const [scanBusy, setScanBusy] = React.useState(false);
+  const [cashReceived, setCashReceived] = React.useState("");
+  const [utangCustomerId, setUtangCustomerId] = React.useState("");
+  const [utangCustomerName, setUtangCustomerName] = React.useState("");
+  const [utangPending, setUtangPending] = React.useState(false);
   const {
     register,
     handleSubmit,
@@ -90,6 +99,7 @@ export function SalesClient({
     watch,
     reset,
     setValue,
+    trigger,
     formState: { errors, isSubmitting },
   } = useForm<z.input<typeof saleSchema>, unknown, SaleInput>({
     resolver: zodResolver(saleSchema),
@@ -102,11 +112,6 @@ export function SalesClient({
   const isCustom = !productId;
   const selected = products.find((p) => p.id === productId);
 
-  const productItems = [
-    { value: CUSTOM, label: "Custom item (new)" },
-    ...products.map((p) => ({ value: p.id, label: p.name })),
-  ];
-
   const displayPrice = isCustom
     ? unitPrice
     : selected
@@ -115,6 +120,30 @@ export function SalesClient({
   const displayCost = isCustom ? 0 : selected ? selected.costPrice : 0;
   const revenue = displayPrice * quantity;
   const profit = (displayPrice - displayCost) * quantity;
+  const receivedAmount = roundMoney(Number.parseFloat(cashReceived) || 0);
+  const hasCashInput = cashReceived.trim() !== "";
+  const cashInsufficient = hasCashInput && receivedAmount < revenue;
+
+  const {
+    items: sales,
+    page: salesPage,
+    pageSize: salesPageSize,
+    totalPages: salesTotalPages,
+    totalItems: salesTotalItems,
+    setPage: setSalesPage,
+    isPending: salesPending,
+  } = useServerPagination(initialSales, fetchSalesPage);
+
+  function clearCashReceived() {
+    setCashReceived("");
+    setUtangCustomerId("");
+    setUtangCustomerName("");
+  }
+
+  function handleUtangCustomerChange(customerId: string, customerName: string) {
+    setUtangCustomerId(customerId);
+    setUtangCustomerName(customerName);
+  }
 
   function selectProduct(value: string) {
     if (value === CUSTOM) {
@@ -175,7 +204,50 @@ export function SalesClient({
     }
   }
 
+  async function handleRecordUtang() {
+    if (!cashInsufficient) return;
+
+    const valid = await trigger();
+    if (!valid) return;
+
+    if (!utangCustomerId && !utangCustomerName.trim()) {
+      toast.error("Select or enter a customer for utang.");
+      return;
+    }
+
+    const values = watch();
+    setUtangPending(true);
+    try {
+      const result = await recordSaleAsUtang({
+        productId: values.productId || "",
+        name: values.name ?? "",
+        unitPrice: Number(values.unitPrice) || 0,
+        quantity: Number(values.quantity) || 1,
+        date: values.date ?? "",
+        customerId: utangCustomerId,
+        customerName: utangCustomerName.trim(),
+        cashReceived: receivedAmount,
+      });
+
+      if (result.success && result.data?.customerId) {
+        toast.success(result.message ?? "Utang recorded");
+        reset(defaultValues);
+        clearCashReceived();
+        router.push(`/utang/${result.data.customerId}`);
+      } else if (!result.success) {
+        toast.error(result.error);
+      }
+    } finally {
+      setUtangPending(false);
+    }
+  }
+
   async function onSubmit(values: SaleInput) {
+    if (cashInsufficient) {
+      toast.error("Cash received is less than the total.");
+      return;
+    }
+
     const payload: SaleInput = values.productId
       ? {
           productId: values.productId,
@@ -193,6 +265,8 @@ export function SalesClient({
     if (result.success) {
       toast.success(result.message ?? "Sale recorded");
       reset(defaultValues);
+      clearCashReceived();
+      router.refresh();
     } else {
       toast.error(result.error);
     }
@@ -200,8 +274,10 @@ export function SalesClient({
 
   async function handleDelete(id: string) {
     const result = await deleteSale(id);
-    if (result.success) toast.success(result.message ?? "Deleted");
-    else toast.error(result.error);
+    if (result.success) {
+      toast.success(result.message ?? "Deleted");
+      router.refresh();
+    } else toast.error(result.error);
   }
 
   return (
@@ -238,27 +314,12 @@ export function SalesClient({
                 control={control}
                 name="productId"
                 render={({ field }) => (
-                  <Select
-                    value={field.value ? field.value : CUSTOM}
-                    onValueChange={(v) => selectProduct(v ?? CUSTOM)}
-                    items={productItems}
-                  >
-                    <SelectTrigger className="h-11 w-full">
-                      <SelectValue placeholder="Select or add item" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={CUSTOM}>Custom item (new)</SelectItem>
-                      {products.map((p) => (
-                        <SelectItem
-                          key={p.id}
-                          value={p.id}
-                          disabled={p.currentStock <= 0}
-                        >
-                          {p.name} ({formatNumber(p.currentStock)} left)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableItemSelect
+                    products={products}
+                    currency={currency}
+                    value={field.value ?? ""}
+                    onValueChange={(v) => selectProduct(v)}
+                  />
                 )}
               />
               <FieldError message={errors.productId?.message} />
@@ -361,29 +422,46 @@ export function SalesClient({
                 type="submit"
                 size="lg"
                 className="h-11 w-full sm:w-auto sm:min-w-36"
-                disabled={isSubmitting}
+                disabled={isSubmitting || cashInsufficient}
               >
                 {isSubmitting ? "Saving..." : "Record Sale"}
               </Button>
             </div>
 
             {(selected || isCustom) && (displayPrice > 0 || isCustom) ? (
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Total: </span>
-                  <span className="text-lg font-semibold tabular-nums">
-                    {formatCurrency(revenue, currency)}
-                  </span>
-                </div>
-                {!isCustom ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
                   <div className="text-sm">
-                    <span className="text-muted-foreground">Profit: </span>
-                    <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
-                      {formatCurrency(profit, currency)}
+                    <span className="text-muted-foreground">Total: </span>
+                    <span className="text-lg font-semibold tabular-nums">
+                      {formatCurrency(revenue, currency)}
                     </span>
                   </div>
+                  {!isCustom ? (
+                    <div className="text-sm">
+                      <span className="text-muted-foreground">Profit: </span>
+                      <span className="font-medium text-emerald-600 tabular-nums dark:text-emerald-400">
+                        {formatCurrency(profit, currency)}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                {revenue > 0 ? (
+                  <CashPaymentSection
+                    total={revenue}
+                    currency={currency}
+                    cashReceived={cashReceived}
+                    onCashReceivedChange={setCashReceived}
+                    utangCustomerId={utangCustomerId}
+                    utangCustomerName={utangCustomerName}
+                    onUtangCustomerChange={handleUtangCustomerChange}
+                    customers={customers}
+                    onRecordUtang={handleRecordUtang}
+                    utangPending={utangPending}
+                  />
                 ) : null}
-              </div>
+              </>
             ) : null}
 
             {isCustom ? (
@@ -398,13 +476,14 @@ export function SalesClient({
 
       <div className="space-y-3">
         <h2 className="font-heading text-lg font-semibold">Recent Sales</h2>
-        {sales.length === 0 ? (
+        {salesTotalItems === 0 ? (
           <EmptyState
             icon={Receipt}
             title="No sales recorded yet"
             description="Recorded sales will appear here."
           />
         ) : (
+          <div className={salesPending ? "opacity-60" : undefined}>
           <>
             <MobileRecordList>
               {sales.map((s) => (
@@ -501,7 +580,16 @@ export function SalesClient({
                 </Table>
               </Card>
             </DesktopTable>
+
+            <PaginationControls
+              page={salesPage}
+              totalPages={salesTotalPages}
+              totalItems={salesTotalItems}
+              pageSize={salesPageSize}
+              onPageChange={setSalesPage}
+            />
           </>
+          </div>
         )}
       </div>
 

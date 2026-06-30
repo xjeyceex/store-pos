@@ -8,6 +8,12 @@ import {
 } from "@/lib/constants";
 import { getStockStatus } from "@/lib/stock";
 import { getProfitSeries } from "@/lib/queries/analytics";
+import {
+  DEFAULT_PAGE_SIZE,
+  getTotalPages,
+  paginateSlice,
+} from "@/lib/pagination";
+import type { Prisma } from "@/generated/prisma/client";
 import type {
   ReportColumn,
   ReportResult,
@@ -228,6 +234,258 @@ async function buildUtangReport(
     rows,
     totals,
   };
+}
+
+export type PaginatedReportResult = ReportResult & {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+};
+
+function paginateReportRows(
+  result: ReportResult,
+  page: number,
+  pageSize: number
+): PaginatedReportResult {
+  const totalItems = result.rows.length;
+  const totalPages = getTotalPages(totalItems, pageSize);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  return {
+    ...result,
+    rows: paginateSlice(result.rows, safePage, pageSize),
+    page: safePage,
+    pageSize,
+    totalItems,
+    totalPages,
+  };
+}
+
+async function buildInventoryReportPage(
+  branchId: string | null | undefined,
+  page: number,
+  pageSize: number
+): Promise<PaginatedReportResult> {
+  const where: Prisma.ProductWhereInput = branchId ? { branchId } : {};
+  const [totalItems, products, allProducts] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      include: { category: true },
+      orderBy: { name: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.product.findMany({
+      where,
+      select: { currentStock: true, costPrice: true, minStockLevel: true },
+    }),
+  ]);
+
+  const rows: ReportRow[] = products.map((p) => ({
+    name: p.name,
+    category: p.category?.name ?? "Uncategorized",
+    stock: p.currentStock,
+    costPrice: roundMoney(p.costPrice),
+    sellingPrice: roundMoney(p.sellingPrice),
+    inventoryValue: roundMoney(p.currentStock * p.costPrice),
+    status: STOCK_STATUS_LABELS[getStockStatus(p.currentStock, p.minStockLevel)],
+  }));
+
+  const totals: ReportRow = {
+    name: "Total",
+    category: "",
+    stock: allProducts.reduce((s, p) => s + p.currentStock, 0),
+    costPrice: "",
+    sellingPrice: "",
+    inventoryValue: roundMoney(
+      allProducts.reduce((s, p) => s + p.currentStock * p.costPrice, 0)
+    ),
+    status: "",
+  };
+
+  const totalPages = getTotalPages(totalItems, pageSize);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  return {
+    type: "INVENTORY",
+    title: "Inventory Report",
+    columns: [
+      { key: "name", header: "Product", type: "text" },
+      { key: "category", header: "Category", type: "text" },
+      { key: "stock", header: "Stock", type: "number" },
+      { key: "costPrice", header: "Cost", type: "currency" },
+      { key: "sellingPrice", header: "Price", type: "currency" },
+      { key: "inventoryValue", header: "Value", type: "currency" },
+      { key: "status", header: "Status", type: "text" },
+    ],
+    rows,
+    totals,
+    page: safePage,
+    pageSize,
+    totalItems,
+    totalPages,
+  };
+}
+
+async function buildExpenseReportPage(
+  range: DateRange,
+  branchId: string | null | undefined,
+  page: number,
+  pageSize: number
+): Promise<PaginatedReportResult> {
+  const where: Prisma.ExpenseWhereInput = {
+    ...(branchId ? { branchId } : {}),
+    expenseDate: { gte: range.from, lte: range.to },
+  };
+
+  const [totalItems, expenses, sumAgg] = await Promise.all([
+    prisma.expense.count({ where }),
+    prisma.expense.findMany({
+      where,
+      orderBy: { expenseDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.expense.aggregate({ where, _sum: { amount: true } }),
+  ]);
+
+  const rows: ReportRow[] = expenses.map((e) => ({
+    date: formatDate(e.expenseDate),
+    description: e.description,
+    category: expenseCategoryLabel(e.category),
+    amount: roundMoney(e.amount),
+  }));
+
+  const totals: ReportRow = {
+    date: "Total",
+    description: "",
+    category: "",
+    amount: roundMoney(sumAgg._sum.amount ?? 0),
+  };
+
+  const totalPages = getTotalPages(totalItems, pageSize);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  return {
+    type: "EXPENSE",
+    title: "Expense Report",
+    columns: [
+      { key: "date", header: "Date", type: "text" },
+      { key: "description", header: "Description", type: "text" },
+      { key: "category", header: "Category", type: "text" },
+      { key: "amount", header: "Amount", type: "currency" },
+    ],
+    rows,
+    totals,
+    page: safePage,
+    pageSize,
+    totalItems,
+    totalPages,
+  };
+}
+
+async function buildUtangReportPage(
+  range: DateRange,
+  branchId: string | null | undefined,
+  page: number,
+  pageSize: number
+): Promise<PaginatedReportResult> {
+  const where: Prisma.UtangWhereInput = {
+    ...(branchId ? { branchId } : {}),
+    utangDate: { gte: range.from, lte: range.to },
+  };
+
+  const [totalItems, utangs, allUtangs] = await Promise.all([
+    prisma.utang.count({ where }),
+    prisma.utang.findMany({
+      where,
+      include: { customer: true, payments: true },
+      orderBy: { utangDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.utang.findMany({
+      where,
+      include: { payments: { select: { amount: true } } },
+    }),
+  ]);
+
+  const rows: ReportRow[] = utangs.map((u) => {
+    const paid = u.payments.reduce((s, p) => s + p.amount, 0);
+    return {
+      date: formatDate(u.utangDate),
+      customer: u.customer.name,
+      amount: roundMoney(u.amount),
+      paid: roundMoney(paid),
+      remaining: roundMoney(Math.max(0, u.amount - paid)),
+      status: utangStatusLabel(u.status),
+    };
+  });
+
+  const totals: ReportRow = {
+    date: "Total",
+    customer: "",
+    amount: roundMoney(allUtangs.reduce((s, u) => s + u.amount, 0)),
+    paid: roundMoney(
+      allUtangs.reduce(
+        (s, u) => s + u.payments.reduce((x, p) => x + p.amount, 0),
+        0
+      )
+    ),
+    remaining: roundMoney(
+      allUtangs.reduce((s, u) => {
+        const paid = u.payments.reduce((x, p) => x + p.amount, 0);
+        return s + Math.max(0, u.amount - paid);
+      }, 0)
+    ),
+    status: "",
+  };
+
+  const totalPages = getTotalPages(totalItems, pageSize);
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  return {
+    type: "UTANG",
+    title: "Utang Report",
+    columns: [
+      { key: "date", header: "Date", type: "text" },
+      { key: "customer", header: "Customer", type: "text" },
+      { key: "amount", header: "Amount", type: "currency" },
+      { key: "paid", header: "Paid", type: "currency" },
+      { key: "remaining", header: "Remaining", type: "currency" },
+      { key: "status", header: "Status", type: "text" },
+    ],
+    rows,
+    totals,
+    page: safePage,
+    pageSize,
+    totalItems,
+    totalPages,
+  };
+}
+
+export async function getReportPage(
+  type: ReportType,
+  range: DateRange,
+  branchId: string | null | undefined,
+  opts: { page?: number; pageSize?: number } = {}
+): Promise<PaginatedReportResult> {
+  const page = opts.page ?? 1;
+  const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
+
+  switch (type) {
+    case "INVENTORY":
+      return buildInventoryReportPage(branchId, page, pageSize);
+    case "EXPENSE":
+      return buildExpenseReportPage(range, branchId, page, pageSize);
+    case "UTANG":
+      return buildUtangReportPage(range, branchId, page, pageSize);
+    default: {
+      const full = await getReport(type, range, branchId);
+      return paginateReportRows(full, page, pageSize);
+    }
+  }
 }
 
 export async function getReport(

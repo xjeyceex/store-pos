@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { roundMoney } from "@/lib/currency";
 import {
+  buildPaginatedResult,
+  DEFAULT_PAGE_SIZE,
+  type PaginatedResult,
+} from "@/lib/pagination";
+import type { Prisma } from "@/generated/prisma/client";
+import {
   todayRange,
   thisWeekRange,
   thisMonthRange,
@@ -15,6 +21,61 @@ export type ExpenseRow = {
   expenseDate: Date;
 };
 
+const expenseSelect = {
+  id: true,
+  description: true,
+  category: true,
+  amount: true,
+  expenseDate: true,
+} as const;
+
+function buildExpenseWhere(
+  branchId: string,
+  query?: string,
+  category?: string
+): Prisma.ExpenseWhereInput {
+  const q = query?.trim();
+  return {
+    branchId,
+    ...(category && category !== "ALL" ? { category } : {}),
+    ...(q
+      ? {
+          OR: [
+            { description: { contains: q } },
+            { category: { contains: q } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function getExpensesPage(
+  branchId: string,
+  opts: {
+    page?: number;
+    pageSize?: number;
+    query?: string;
+    category?: string;
+  } = {}
+): Promise<PaginatedResult<ExpenseRow>> {
+  const page = opts.page ?? 1;
+  const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = buildExpenseWhere(branchId, opts.query, opts.category);
+
+  const [totalItems, items] = await Promise.all([
+    prisma.expense.count({ where }),
+    prisma.expense.findMany({
+      where,
+      orderBy: { expenseDate: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: expenseSelect,
+    }),
+  ]);
+
+  return buildPaginatedResult(items, totalItems, page, pageSize);
+}
+
 export async function getExpenses(
   branchId?: string | null,
   limit = 200
@@ -23,13 +84,7 @@ export async function getExpenses(
     where: branchId ? { branchId } : undefined,
     orderBy: { expenseDate: "desc" },
     take: limit,
-    select: {
-      id: true,
-      description: true,
-      category: true,
-      amount: true,
-      expenseDate: true,
-    },
+    select: expenseSelect,
   });
 }
 

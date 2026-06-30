@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Receipt } from "lucide-react";
+import { Plus, Pencil, Trash2, Receipt } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -32,6 +31,11 @@ import {
   MobileRecordCard,
   MobileRecordList,
 } from "@/components/shared/mobile-record-card";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { SearchInput } from "@/components/shared/search-input";
+import { useServerPaginationWithFilters } from "@/components/shared/use-server-pagination";
+import { fetchExpensesPage } from "@/lib/actions/lists";
+import type { PaginatedResult } from "@/lib/pagination";
 import { formatCurrency } from "@/lib/currency";
 import { formatDate } from "@/lib/dates";
 import { EXPENSE_CATEGORIES, expenseCategoryLabel } from "@/lib/constants";
@@ -39,28 +43,26 @@ import { deleteExpense } from "@/lib/actions/expenses";
 import type { ExpenseRow } from "@/lib/queries/expenses";
 
 export function ExpensesClient({
-  expenses,
+  initial,
   totals,
   currency,
 }: {
-  expenses: ExpenseRow[];
+  initial: PaginatedResult<ExpenseRow>;
   totals: { today: number; week: number; month: number; year: number };
   currency: string;
 }) {
-  const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState("ALL");
-
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return expenses.filter((e) => {
-      const matchesQuery =
-        !q ||
-        e.description.toLowerCase().includes(q) ||
-        expenseCategoryLabel(e.category).toLowerCase().includes(q);
-      const matchesCategory = category === "ALL" || e.category === category;
-      return matchesQuery && matchesCategory;
-    });
-  }, [expenses, query, category]);
+  const {
+    items: expenses,
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    query,
+    setQuery,
+    setPage,
+    isPending,
+  } = useServerPaginationWithFilters(initial, fetchExpensesPage, { category });
 
   async function handleDelete(id: string) {
     const result = await deleteExpense(id);
@@ -81,10 +83,8 @@ export function ExpensesClient({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative sm:max-w-xs">
-              <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+              <SearchInput
                 placeholder="Search expenses..."
-                className="pl-8"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -123,20 +123,21 @@ export function ExpensesClient({
           />
         </div>
 
-        {filtered.length === 0 ? (
+        {totalItems === 0 ? (
           <EmptyState
             icon={Receipt}
             title="No expenses found"
             description={
-              expenses.length === 0
-                ? "Record your store's expenses to track net profit."
-                : "Try a different search or filter."
+              query || category !== "ALL"
+                ? "Try a different search or filter."
+                : "Record your store's expenses to track net profit."
             }
           />
         ) : (
+          <div className={isPending ? "opacity-60" : undefined}>
           <>
             <MobileRecordList>
-              {filtered.map((e) => (
+              {expenses.map((e) => (
                 <MobileRecordCard
                   key={e.id}
                   title={e.description}
@@ -202,7 +203,7 @@ export function ExpensesClient({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((e) => (
+                {expenses.map((e) => (
                   <TableRow key={e.id}>
                     <TableCell className="text-muted-foreground whitespace-nowrap">
                       {formatDate(e.expenseDate)}
@@ -252,7 +253,16 @@ export function ExpensesClient({
                 </Table>
               </Card>
             </DesktopTable>
+
+            <PaginationControls
+              page={page}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              pageSize={pageSize}
+              onPageChange={setPage}
+            />
           </>
+          </div>
         )}
       </div>
     </div>

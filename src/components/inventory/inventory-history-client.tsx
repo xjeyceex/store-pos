@@ -1,9 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Search, History } from "lucide-react";
+import { History } from "lucide-react";
 
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -26,6 +25,11 @@ import {
   MobileRecordCard,
   MobileRecordList,
 } from "@/components/shared/mobile-record-card";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { SearchInput } from "@/components/shared/search-input";
+import { useServerPaginationWithFilters } from "@/components/shared/use-server-pagination";
+import { fetchInventoryLogsPage } from "@/lib/actions/lists";
+import type { PaginatedResult } from "@/lib/pagination";
 import { formatDateTime } from "@/lib/dates";
 import { formatNumber } from "@/lib/currency";
 import { INVENTORY_REASONS, inventoryReasonLabel } from "@/lib/constants";
@@ -33,30 +37,31 @@ import { cn } from "@/lib/utils";
 import type { InventoryLogRow } from "@/lib/queries/inventory";
 
 export function InventoryHistoryClient({
-  logs,
+  initial,
 }: {
-  logs: InventoryLogRow[];
+  initial: PaginatedResult<InventoryLogRow>;
 }) {
-  const [query, setQuery] = React.useState("");
   const [reason, setReason] = React.useState("ALL");
-
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return logs.filter((l) => {
-      const matchesQuery = !q || l.productName.toLowerCase().includes(q);
-      const matchesReason = reason === "ALL" || l.reason === reason;
-      return matchesQuery && matchesReason;
-    });
-  }, [logs, query, reason]);
+  const {
+    items: logs,
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    query,
+    setQuery,
+    setPage,
+    isPending,
+  } = useServerPaginationWithFilters(initial, fetchInventoryLogsPage, {
+    reason,
+  });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative sm:max-w-xs">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <SearchInput
             placeholder="Search by product..."
-            className="pl-8"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -83,16 +88,17 @@ export function InventoryHistoryClient({
         </Select>
       </div>
 
-      {filtered.length === 0 ? (
+      {totalItems === 0 ? (
         <EmptyState
           icon={History}
           title="No inventory movements"
           description="Stock changes from sales, restocks, and adjustments will appear here."
         />
       ) : (
+        <div className={isPending ? "opacity-60" : undefined}>
         <>
           <MobileRecordList>
-            {filtered.map((l) => (
+            {logs.map((l) => (
               <MobileRecordCard
                 key={l.id}
                 title={l.productName}
@@ -147,7 +153,7 @@ export function InventoryHistoryClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((l) => (
+              {logs.map((l) => (
                 <TableRow key={l.id}>
                   <TableCell className="text-muted-foreground whitespace-nowrap">
                     {formatDateTime(l.createdAt)}
@@ -182,7 +188,16 @@ export function InventoryHistoryClient({
               </Table>
             </Card>
           </DesktopTable>
+
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </>
+        </div>
       )}
     </div>
   );

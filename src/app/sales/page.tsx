@@ -2,7 +2,8 @@ import { PageHeader } from "@/components/shared/page-header";
 import { SalesClient } from "@/components/sales/sales-client";
 import { BranchScopeNotice } from "@/components/layout/branch-scope-notice";
 import { getProductOptions } from "@/lib/queries/products";
-import { getSales } from "@/lib/queries/sales";
+import { getSalesPage } from "@/lib/queries/sales";
+import { getCustomerOptions } from "@/lib/queries/utang";
 import { getCurrency, getSettings } from "@/lib/queries/settings";
 import { getBranchContext } from "@/lib/queries/branches";
 
@@ -23,9 +24,10 @@ export default async function SalesPage() {
     );
   }
 
-  const [products, sales, currency, settings] = await Promise.all([
+  const [products, sales, customers, currency, settings] = await Promise.all([
     getProductOptions(ctx.branchId),
-    getSales(ctx.branchId),
+    getSalesPage(ctx.branchId, { page: 1 }),
+    getCustomerOptions(ctx.branchId),
     getCurrency(),
     getSettings(),
   ]);
@@ -38,7 +40,8 @@ export default async function SalesPage() {
       />
       <SalesClient
         products={products}
-        sales={sales}
+        initialSales={sales}
+        customers={customers}
         currency={currency}
         defaultMinStock={settings.defaultLowStockThreshold}
       />

@@ -33,6 +33,7 @@ import {
   getTopSellingProducts,
   getProductPerformanceAll,
   getInventoryValueTrend,
+  getProductPerformanceSoldPage,
   type AnalyticsData,
 } from "@/lib/queries/analytics";
 
@@ -62,6 +63,7 @@ export default async function DashboardPage() {
     topProducts,
     productPerformance,
     inventoryTrend,
+    productPerformancePage,
   ] = await Promise.all([
     getSettings(),
     getCurrency(),
@@ -77,6 +79,7 @@ export default async function DashboardPage() {
     getTopSellingProducts(range, 7, branchId),
     getProductPerformanceAll(range, branchId),
     getInventoryValueTrend(range, branchId),
+    getProductPerformanceSoldPage(range, branchId, { page: 1 }),
   ]);
 
   const analytics: AnalyticsData = {
@@ -168,6 +171,7 @@ export default async function DashboardPage() {
 
         <AnalyticsCharts
           initial={analytics}
+          initialProductPerformance={productPerformancePage}
           currency={currency}
           initialRange={{ preset: "LAST_30_DAYS", from: "", to: "" }}
         />

@@ -28,11 +28,13 @@ import {
 } from "@/components/ui/table";
 import { RangeFilter, type RangeValue } from "@/components/shared/range-filter";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { fetchReportPage } from "@/lib/actions/lists";
 import { fetchReport } from "@/lib/actions/reports";
+import type { PaginatedReportResult } from "@/lib/queries/reports";
 import {
   REPORT_TYPES,
   type ReportColumn,
-  type ReportResult,
   type ReportType,
 } from "@/lib/reports-meta";
 import { formatCurrency, formatNumber } from "@/lib/currency";
@@ -44,7 +46,7 @@ export function ReportsClient({
   initialType,
   currency,
 }: {
-  initial: ReportResult;
+  initial: PaginatedReportResult;
   initialType: ReportType;
   currency: string;
 }) {
@@ -54,19 +56,24 @@ export function ReportsClient({
     from: "",
     to: "",
   });
-  const [result, setResult] = useState<ReportResult>(initial);
+  const [result, setResult] = useState<PaginatedReportResult>(initial);
   const [isPending, startTransition] = useTransition();
 
-  function refresh(nextType: ReportType, nextRange: RangeValue) {
+  function refresh(
+    nextType: ReportType,
+    nextRange: RangeValue,
+    nextPage = 1
+  ) {
     if (nextRange.preset === "CUSTOM" && (!nextRange.from || !nextRange.to)) {
       return;
     }
     startTransition(async () => {
-      const r = await fetchReport({
+      const r = await fetchReportPage({
         type: nextType,
         preset: nextRange.preset,
         from: nextRange.from || null,
         to: nextRange.to || null,
+        page: nextPage,
       });
       setResult(r);
     });
@@ -75,12 +82,16 @@ export function ReportsClient({
   function handleTypeChange(value: string | null) {
     const next = (value as ReportType) ?? "DAILY_SALES";
     setType(next);
-    refresh(next, range);
+    refresh(next, range, 1);
   }
 
   function handleRangeChange(next: RangeValue) {
     setRange(next);
-    refresh(type, next);
+    refresh(type, next, 1);
+  }
+
+  function handlePageChange(nextPage: number) {
+    refresh(type, range, nextPage);
   }
 
   function formatCell(col: ReportColumn, value: string | number): string {
@@ -90,13 +101,17 @@ export function ReportsClient({
     return String(value);
   }
 
-  function handleExport() {
-    const cols = result.columns.map((c) => ({ key: c.key, header: c.header }));
-    const rows = result.totals
-      ? [...result.rows, result.totals]
-      : result.rows;
+  async function handleExport() {
+    const full = await fetchReport({
+      type: result.type,
+      preset: range.preset,
+      from: range.from || null,
+      to: range.to || null,
+    });
+    const cols = full.columns.map((c) => ({ key: c.key, header: c.header }));
+    const rows = full.totals ? [...full.rows, full.totals] : full.rows;
     const csv = toCSV(rows as Record<string, unknown>[], cols);
-    downloadCSV(`${result.type.toLowerCase()}_report`, csv);
+    downloadCSV(`${full.type.toLowerCase()}_report`, csv);
   }
 
   const isInventory = type === "INVENTORY";
@@ -152,7 +167,7 @@ export function ReportsClient({
           <CardTitle>{result.title}</CardTitle>
         </CardHeader>
         <CardContent>
-          {result.rows.length === 0 ? (
+          {result.totalItems === 0 ? (
             <EmptyState
               title="No data"
               description="No records found for this report and period."
@@ -217,6 +232,17 @@ export function ReportsClient({
               </Table>
             </div>
           )}
+
+          {result.totalItems > 0 ? (
+            <PaginationControls
+              page={result.page}
+              totalPages={result.totalPages}
+              totalItems={result.totalItems}
+              pageSize={result.pageSize}
+              onPageChange={handlePageChange}
+              className="mt-3 border-t-0 pt-0"
+            />
+          ) : null}
         </CardContent>
       </Card>
     </div>

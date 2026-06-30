@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ReportsClient } from "@/components/reports/reports-client";
 import { resolveDateRange } from "@/lib/dates";
 import { getCurrency } from "@/lib/queries/settings";
-import { getReport, type ReportType } from "@/lib/queries/reports";
+import { getReportPage, type ReportType } from "@/lib/queries/reports";
 import { getBranchContext } from "@/lib/queries/branches";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function ReportsPage() {
   const consolidated = ctx.mode === "all";
   const [currency, initial] = await Promise.all([
     getCurrency(),
-    getReport(initialType, range, ctx.branchId),
+    getReportPage(initialType, range, ctx.branchId, { page: 1 }),
   ]);
 
   return (

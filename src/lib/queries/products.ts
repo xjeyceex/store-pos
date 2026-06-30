@@ -1,6 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { computeProduct, getStockStatus } from "@/lib/stock";
 import type { StockStatus } from "@/lib/constants";
+import {
+  buildPaginatedResult,
+  DEFAULT_PAGE_SIZE,
+  type PaginatedResult,
+} from "@/lib/pagination";
+import type { Prisma } from "@/generated/prisma/client";
 
 export type ProductRow = {
   id: string;
@@ -29,15 +35,12 @@ export type ProductOption = {
   currentStock: number;
 };
 
-export async function getProducts(
-  branchId?: string | null
-): Promise<ProductRow[]> {
-  const products = await prisma.product.findMany({
-    where: branchId ? { branchId } : undefined,
-    include: { category: true },
-    orderBy: { name: "asc" },
-  });
-  return products.map((p) => ({
+function mapProductRow(
+  p: Awaited<
+    ReturnType<typeof prisma.product.findMany<{ include: { category: true } }>>
+  >[number]
+): ProductRow {
+  return {
     id: p.id,
     name: p.name,
     barcode: p.barcode,
@@ -51,7 +54,104 @@ export async function getProducts(
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
     ...computeProduct(p),
-  }));
+  };
+}
+
+function buildProductWhere(
+  branchId: string,
+  query?: string,
+  category?: string
+): Prisma.ProductWhereInput {
+  const q = query?.trim();
+  return {
+    branchId,
+    ...(category && category !== "ALL"
+      ? { category: { name: category } }
+      : {}),
+    ...(q
+      ? {
+          OR: [
+            { name: { contains: q } },
+            { barcode: { contains: q } },
+            { category: { name: { contains: q } } },
+          ],
+        }
+      : {}),
+  };
+}
+
+export async function getProductsPage(
+  branchId: string,
+  opts: {
+    page?: number;
+    pageSize?: number;
+    query?: string;
+    category?: string;
+  } = {}
+): Promise<PaginatedResult<ProductRow>> {
+  const page = opts.page ?? 1;
+  const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
+  const where = buildProductWhere(branchId, opts.query, opts.category);
+
+  const [totalItems, products] = await Promise.all([
+    prisma.product.count({ where }),
+    prisma.product.findMany({
+      where,
+      include: { category: true },
+      orderBy: { name: "asc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+  ]);
+
+  return buildPaginatedResult(
+    products.map(mapProductRow),
+    totalItems,
+    page,
+    pageSize
+  );
+}
+
+export async function searchProductOptions(
+  branchId: string,
+  query: string,
+  limit = 50
+): Promise<ProductOption[]> {
+  const q = query.trim();
+  return prisma.product.findMany({
+    where: {
+      branchId,
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q } },
+              { barcode: { contains: q } },
+            ],
+          }
+        : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      barcode: true,
+      sellingPrice: true,
+      costPrice: true,
+      currentStock: true,
+    },
+    orderBy: { name: "asc" },
+    take: limit,
+  });
+}
+
+export async function getProducts(
+  branchId?: string | null
+): Promise<ProductRow[]> {
+  const products = await prisma.product.findMany({
+    where: branchId ? { branchId } : undefined,
+    include: { category: true },
+    orderBy: { name: "asc" },
+  });
+  return products.map(mapProductRow);
 }
 
 export async function getProductById(id: string) {

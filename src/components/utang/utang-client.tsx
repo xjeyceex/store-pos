@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Plus, Search, UserPlus, HandCoins, ChevronRight } from "lucide-react";
+import { Plus, UserPlus, HandCoins, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -24,34 +23,39 @@ import {
   MobileRecordCard,
   MobileRecordList,
 } from "@/components/shared/mobile-record-card";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { SearchInput } from "@/components/shared/search-input";
+import { useServerPagination } from "@/components/shared/use-server-pagination";
+import { fetchCustomersPage } from "@/lib/actions/lists";
+import type { PaginatedResult } from "@/lib/pagination";
 import { formatCurrency } from "@/lib/currency";
 import type { CustomerRow } from "@/lib/queries/utang";
 import type { ProductOption } from "@/lib/queries/products";
 
 export function UtangClient({
-  customers,
+  initial,
   customerOptions,
   products,
   totalOutstanding,
   currency,
 }: {
-  customers: CustomerRow[];
+  initial: PaginatedResult<CustomerRow>;
   customerOptions: { id: string; name: string }[];
   products: ProductOption[];
   totalOutstanding: number;
   currency: string;
 }) {
-  const [query, setQuery] = React.useState("");
-
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return customers;
-    return customers.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.phone ?? "").toLowerCase().includes(q)
-    );
-  }, [customers, query]);
+  const {
+    items: customers,
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    query,
+    setQuery,
+    setPage,
+    isPending,
+  } = useServerPagination(initial, fetchCustomersPage);
 
   return (
     <div className="space-y-6">
@@ -63,7 +67,7 @@ export function UtangClient({
           icon={HandCoins}
           className="sm:col-span-1"
         />
-        <StatCard label="Customers" value={String(customers.length)} />
+        <StatCard label="Customers" value={String(totalItems)} />
         <StatCard
           label="With Balance"
           value={String(customers.filter((c) => c.balance > 0).length)}
@@ -72,10 +76,8 @@ export function UtangClient({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative sm:max-w-xs">
-          <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
+          <SearchInput
             placeholder="Search customers..."
-            className="pl-8"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -106,20 +108,21 @@ export function UtangClient({
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {totalItems === 0 ? (
         <EmptyState
           icon={HandCoins}
           title="No customers found"
           description={
-            customers.length === 0
-              ? "Add a customer to start tracking utang."
-              : "Try a different search."
+            query
+              ? "Try a different search."
+              : "Add a customer to start tracking utang."
           }
         />
       ) : (
+        <div className={isPending ? "opacity-60" : undefined}>
         <>
           <MobileRecordList>
-            {filtered.map((c) => (
+            {customers.map((c) => (
               <MobileRecordCard
                 key={c.id}
                 title={
@@ -184,7 +187,7 @@ export function UtangClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((c) => (
+              {customers.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">
                     <Link
@@ -230,7 +233,16 @@ export function UtangClient({
               </Table>
             </Card>
           </DesktopTable>
+
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </>
+        </div>
       )}
     </div>
   );

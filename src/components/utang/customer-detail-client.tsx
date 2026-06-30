@@ -15,6 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { StatCard } from "@/components/shared/stat-card";
 import { EmptyState } from "@/components/shared/empty-state";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { useServerPagination } from "@/components/shared/use-server-pagination";
+import { fetchCustomerUtangsPage } from "@/lib/actions/lists";
+import type { PaginatedResult } from "@/lib/pagination";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { UtangStatusBadge } from "@/components/shared/status-badges";
 import { CustomerFormDialog } from "@/components/utang/customer-form-dialog";
@@ -25,19 +29,33 @@ import { formatCurrency, formatNumber } from "@/lib/currency";
 import { formatDate } from "@/lib/dates";
 import { deleteUtang, deletePayment } from "@/lib/actions/utang";
 import { deleteCustomer as deleteCustomerAction } from "@/lib/actions/customers";
-import type { CustomerDetail } from "@/lib/queries/utang";
+import type { CustomerSummary, UtangEntry } from "@/lib/queries/utang";
 import type { ProductOption } from "@/lib/queries/products";
 
 export function CustomerDetailClient({
   customer,
+  initialUtangs,
   products,
   currency,
 }: {
-  customer: CustomerDetail;
+  customer: CustomerSummary;
+  initialUtangs: PaginatedResult<UtangEntry>;
   products: ProductOption[];
   currency: string;
 }) {
   const router = useRouter();
+
+  const {
+    items: utangs,
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    setPage,
+    isPending,
+  } = useServerPagination(initialUtangs, ({ page }) =>
+    fetchCustomerUtangsPage(customer.id, { page })
+  );
 
   async function handleDeleteCustomer() {
     const result = await deleteCustomerAction(customer.id);
@@ -134,15 +152,16 @@ export function CustomerDetailClient({
         />
       </div>
 
-      {customer.utangs.length === 0 ? (
+      {totalItems === 0 ? (
         <EmptyState
           icon={HandCoins}
           title="No utang yet"
           description="Add an utang record for this customer."
         />
       ) : (
+        <div className={isPending ? "opacity-60" : undefined}>
         <div className="space-y-4">
-          {customer.utangs.map((u) => (
+          {utangs.map((u) => (
             <Card key={u.id}>
               <CardHeader>
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -289,6 +308,15 @@ export function CustomerDetailClient({
               </CardContent>
             </Card>
           ))}
+
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
+        </div>
         </div>
       )}
     </div>

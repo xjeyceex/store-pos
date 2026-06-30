@@ -2,10 +2,9 @@
 
 import * as React from "react";
 import { toast } from "sonner";
-import { Plus, Search, Pencil, Trash2, Package } from "lucide-react";
+import { Plus, Pencil, Trash2, Package } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -30,37 +29,43 @@ import {
   MobileRecordCard,
   MobileRecordList,
 } from "@/components/shared/mobile-record-card";
+import { PaginationControls } from "@/components/shared/pagination-controls";
+import { SearchInput } from "@/components/shared/search-input";
+import { useServerPaginationWithFilters } from "@/components/shared/use-server-pagination";
 import { ProductFormDialog } from "@/components/products/product-form-dialog";
+import { fetchProductsPage } from "@/lib/actions/lists";
+import type { PaginatedResult } from "@/lib/pagination";
 import { formatCurrency, formatNumber } from "@/lib/currency";
 import { deleteProduct } from "@/lib/actions/products";
 import type { ProductRow } from "@/lib/queries/products";
 
 export function ProductsClient({
-  products,
+  initial,
   categories,
   currency,
   defaultMinStock,
 }: {
-  products: ProductRow[];
+  initial: PaginatedResult<ProductRow>;
   categories: string[];
   currency: string;
   defaultMinStock: number;
 }) {
-  const [query, setQuery] = React.useState("");
   const [category, setCategory] = React.useState<string>("ALL");
-
-  const filtered = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter((p) => {
-      const matchesQuery =
-        !q ||
-        p.name.toLowerCase().includes(q) ||
-        (p.categoryName ?? "").toLowerCase().includes(q);
-      const matchesCategory =
-        category === "ALL" || p.categoryName === category;
-      return matchesQuery && matchesCategory;
-    });
-  }, [products, query, category]);
+  const {
+    items: products,
+    page,
+    pageSize,
+    totalPages,
+    totalItems,
+    query,
+    setQuery,
+    setPage,
+    isPending,
+  } = useServerPaginationWithFilters(
+    initial,
+    fetchProductsPage,
+    { category }
+  );
 
   async function handleDelete(id: string) {
     const result = await deleteProduct(id);
@@ -73,10 +78,8 @@ export function ProductsClient({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
           <div className="relative sm:max-w-xs">
-            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
+            <SearchInput
               placeholder="Search products..."
-              className="pl-8"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -115,20 +118,21 @@ export function ProductsClient({
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {totalItems === 0 ? (
         <EmptyState
           icon={Package}
           title="No products found"
           description={
-            products.length === 0
-              ? "Add your first product to start tracking inventory."
-              : "Try a different search or category filter."
+            query || category !== "ALL"
+              ? "Try a different search or category filter."
+              : "Add your first product to start tracking inventory."
           }
         />
       ) : (
-        <>
+        <div className={isPending ? "opacity-60" : undefined}>
+          <>
           <MobileRecordList>
-            {filtered.map((p) => (
+            {products.map((p) => (
               <MobileRecordCard
                 key={p.id}
                 title={p.name}
@@ -208,7 +212,7 @@ export function ProductsClient({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.map((p) => (
+              {products.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="font-medium">{p.name}</TableCell>
                   <TableCell className="text-muted-foreground">
@@ -271,7 +275,16 @@ export function ProductsClient({
             </Table>
           </Card>
         </DesktopTable>
-        </>
+
+          <PaginationControls
+            page={page}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
+          </>
+        </div>
       )}
     </div>
   );

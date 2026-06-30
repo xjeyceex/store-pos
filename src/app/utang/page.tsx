@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { UtangClient } from "@/components/utang/utang-client";
 import { BranchScopeNotice } from "@/components/layout/branch-scope-notice";
-import { getCustomers, getCustomerOptions } from "@/lib/queries/utang";
+import { getCustomersPage, getCustomerOptions } from "@/lib/queries/utang";
 import { getProductOptions } from "@/lib/queries/products";
 import { getOutstandingUtangTotal } from "@/lib/queries/dashboard";
 import { getCurrency } from "@/lib/queries/settings";
@@ -26,7 +26,7 @@ export default async function UtangPage() {
 
   const [customers, customerOptions, products, totalOutstanding, currency] =
     await Promise.all([
-      getCustomers(ctx.branchId),
+      getCustomersPage(ctx.branchId, { page: 1 }),
       getCustomerOptions(ctx.branchId),
       getProductOptions(ctx.branchId),
       getOutstandingUtangTotal(ctx.branchId),
@@ -40,7 +40,7 @@ export default async function UtangPage() {
         description={`Customer credit for ${ctx.branchName}.`}
       />
       <UtangClient
-        customers={customers}
+        initial={customers}
         customerOptions={customerOptions}
         products={products}
         totalOutstanding={totalOutstanding}

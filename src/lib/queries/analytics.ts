@@ -7,8 +7,14 @@ import {
   format,
 } from "date-fns";
 
+import { Prisma } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { roundMoney } from "@/lib/currency";
+import {
+  buildPaginatedResult,
+  DEFAULT_PAGE_SIZE,
+  type PaginatedResult,
+} from "@/lib/pagination";
 import {
   type DateRange,
   todayRange,
@@ -109,6 +115,88 @@ export async function getProductPerformance(
       grossProfit: roundMoney(g._sum.grossProfit ?? 0),
     }))
     .sort((a, b) => b.quantitySold - a.quantitySold);
+}
+
+type SoldProductGroupRow = {
+  productId: string | null;
+  quantitySold: number;
+  revenue: number;
+  grossProfit: number;
+};
+
+export async function getProductPerformanceSoldPage(
+  range: DateRange,
+  branchId: string | null | undefined,
+  opts: { page?: number; pageSize?: number } = {}
+): Promise<PaginatedResult<ProductPerformance>> {
+  const page = opts.page ?? 1;
+  const pageSize = opts.pageSize ?? DEFAULT_PAGE_SIZE;
+  const offset = (page - 1) * pageSize;
+  const branchClause = branchId
+    ? Prisma.sql`AND branchId = ${branchId}`
+    : Prisma.empty;
+
+  const [countRow, groups] = await Promise.all([
+    prisma.$queryRaw<[{ count: bigint }]>(
+      Prisma.sql`
+        SELECT COUNT(*) AS count FROM (
+          SELECT productId
+          FROM Sale
+          WHERE saleDate >= ${range.from}
+            AND saleDate <= ${range.to}
+            ${branchClause}
+          GROUP BY productId
+          HAVING SUM(quantity) > 0
+        )
+      `
+    ),
+    prisma.$queryRaw<SoldProductGroupRow[]>(
+      Prisma.sql`
+        SELECT
+          productId,
+          SUM(quantity) AS quantitySold,
+          SUM(revenue) AS revenue,
+          SUM(grossProfit) AS grossProfit
+        FROM Sale
+        WHERE saleDate >= ${range.from}
+          AND saleDate <= ${range.to}
+          ${branchClause}
+        GROUP BY productId
+        HAVING SUM(quantity) > 0
+        ORDER BY SUM(quantity) DESC
+        LIMIT ${pageSize} OFFSET ${offset}
+      `
+    ),
+  ]);
+
+  const totalItems = Number(countRow[0]?.count ?? 0);
+  const productIds = groups
+    .map((g) => g.productId)
+    .filter((id): id is string => id != null);
+
+  const products =
+    productIds.length > 0
+      ? await prisma.product.findMany({
+          where: {
+            id: { in: productIds },
+            ...(branchId ? { branchId } : {}),
+          },
+          select: { id: true, name: true },
+        })
+      : [];
+  const nameMap = new Map(products.map((p) => [p.id, p.name]));
+
+  const items: ProductPerformance[] = groups.map((g) => ({
+    productId: g.productId,
+    name: g.productId
+      ? (nameMap.get(g.productId) ?? "Unknown product")
+      : "Deleted product",
+    quantitySold: Number(g.quantitySold),
+    revenue: roundMoney(Number(g.revenue)),
+    grossProfit: roundMoney(Number(g.grossProfit)),
+  }));
+
+  return buildPaginatedResult(items, totalItems, page, pageSize);
 }
 
 /** All current products, merged with their performance (0 if no sales). */

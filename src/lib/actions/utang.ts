@@ -15,10 +15,15 @@ import { recomputeDailySummary } from "@/lib/queries/summaries";
 import { revalidateAll } from "@/lib/revalidate";
 import { fieldErrorsFromZod } from "@/lib/zod-helpers";
 import { computeUtangStatus } from "@/lib/utang-status";
+import { saleAsUtangSchema, type SaleAsUtangInput } from "@/lib/validations/sale";
+import { getActiveBranchId } from "@/lib/queries/branches";
 import type { ActionResult } from "@/lib/types";
 
-async function refreshUtangStatus(utangId: string): Promise<void> {
-  const utang = await prisma.utang.findUnique({
+async function refreshUtangStatus(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0] | typeof prisma,
+  utangId: string
+): Promise<void> {
+  const utang = await tx.utang.findUnique({
     where: { id: utangId },
     include: { payments: true },
   });
@@ -26,8 +31,120 @@ async function refreshUtangStatus(utangId: string): Promise<void> {
   const totalPaid = utang.payments.reduce((s, p) => s + p.amount, 0);
   const status = computeUtangStatus(utang.amount, totalPaid);
   if (status !== utang.status) {
-    await prisma.utang.update({ where: { id: utangId }, data: { status } });
+    await tx.utang.update({ where: { id: utangId }, data: { status } });
   }
+}
+
+type UtangLine = {
+  productId: string | null;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+};
+
+async function createUtangRecord(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  params: {
+    customerId: string;
+    utangDate: Date;
+    notes: string | null;
+    lines: UtangLine[];
+    initialPayment?: number;
+  }
+) {
+  const customer = await tx.customer.findUnique({
+    where: { id: params.customerId },
+  });
+  if (!customer) throw new Error("Customer not found.");
+
+  const amount = roundMoney(params.lines.reduce((s, l) => s + l.lineTotal, 0));
+  const initialPayment = roundMoney(params.initialPayment ?? 0);
+
+  if (initialPayment > amount) {
+    throw new Error("Cash received cannot exceed the total.");
+  }
+
+  const neededByProduct = new Map<string, number>();
+  for (const l of params.lines) {
+    if (l.productId) {
+      neededByProduct.set(
+        l.productId,
+        (neededByProduct.get(l.productId) ?? 0) + l.quantity
+      );
+    }
+  }
+
+  for (const [productId, needed] of neededByProduct) {
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product) throw new Error("A selected product no longer exists.");
+    if (product.currentStock < needed) {
+      throw new Error(
+        `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
+      );
+    }
+  }
+
+  const utang = await tx.utang.create({
+    data: {
+      branchId: customer.branchId,
+      customerId: params.customerId,
+      amount,
+      utangDate: params.utangDate,
+      notes: params.notes,
+      status: "UNPAID",
+      items: {
+        create: params.lines.map((l) => ({
+          productId: l.productId,
+          name: l.name,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          lineTotal: l.lineTotal,
+        })),
+      },
+    },
+  });
+
+  for (const [productId, needed] of neededByProduct) {
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product) continue;
+    const before = product.currentStock;
+    const after = before - needed;
+    await tx.product.update({
+      where: { id: productId },
+      data: { currentStock: after },
+    });
+    await tx.inventoryLog.create({
+      data: {
+        branchId: customer.branchId,
+        productId,
+        productName: product.name,
+        quantityBefore: before,
+        quantityChange: -needed,
+        quantityAfter: after,
+        reason: "UTANG",
+        note: `Utang: ${customer.name}`,
+        createdAt: params.utangDate,
+      },
+    });
+  }
+
+  if (initialPayment > 0) {
+    await tx.utangPayment.create({
+      data: {
+        utangId: utang.id,
+        amount: initialPayment,
+        paymentDate: params.utangDate,
+      },
+    });
+    await refreshUtangStatus(tx, utang.id);
+  }
+
+  return { utang, branchId: customer.branchId };
+}
+
+async function refreshUtangStatusStandalone(utangId: string): Promise<void> {
+  await refreshUtangStatus(prisma, utangId);
 }
 
 export async function createUtang(input: UtangInput): Promise<ActionResult> {
@@ -53,86 +170,18 @@ export async function createUtang(input: UtangInput): Promise<ActionResult> {
       lineTotal: roundMoney(unitPrice * it.quantity),
     };
   });
-  const amount = roundMoney(lines.reduce((s, l) => s + l.lineTotal, 0));
-
-  // Total quantity needed per catalog product (a product may appear twice).
-  const neededByProduct = new Map<string, number>();
-  for (const l of lines) {
-    if (l.productId) {
-      neededByProduct.set(
-        l.productId,
-        (neededByProduct.get(l.productId) ?? 0) + l.quantity
-      );
-    }
-  }
 
   let branchId: string | null = null;
 
   try {
     await prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.findUnique({
-        where: { id: d.customerId },
+      const { branchId: bid } = await createUtangRecord(tx, {
+        customerId: d.customerId,
+        utangDate,
+        notes: d.notes || null,
+        lines,
       });
-      if (!customer) throw new Error("Customer not found.");
-      branchId = customer.branchId;
-
-      // Validate stock for every catalog product up front.
-      for (const [productId, needed] of neededByProduct) {
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product) throw new Error("A selected product no longer exists.");
-        if (product.currentStock < needed) {
-          throw new Error(
-            `Not enough stock. Only ${product.currentStock} of ${product.name} left.`
-          );
-        }
-      }
-
-      const utang = await tx.utang.create({
-        data: {
-          branchId: customer.branchId,
-          customerId: d.customerId,
-          amount,
-          utangDate,
-          notes: d.notes || null,
-          status: "UNPAID",
-          items: {
-            create: lines.map((l) => ({
-              productId: l.productId,
-              name: l.name,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              lineTotal: l.lineTotal,
-            })),
-          },
-        },
-      });
-
-      // Reduce stock once per product and log the movement.
-      for (const [productId, needed] of neededByProduct) {
-        const product = await tx.product.findUnique({ where: { id: productId } });
-        if (!product) continue;
-        const before = product.currentStock;
-        const after = before - needed;
-        await tx.product.update({
-          where: { id: productId },
-          data: { currentStock: after },
-        });
-        await tx.inventoryLog.create({
-          data: {
-            branchId: customer.branchId,
-            productId,
-            productName: product.name,
-            quantityBefore: before,
-            quantityChange: -needed,
-            quantityAfter: after,
-            reason: "UTANG",
-            note: `Utang: ${customer.name}`,
-            createdAt: utangDate,
-          },
-        });
-      }
-
-      return utang;
+      branchId = bid;
     });
   } catch (e) {
     return {
@@ -171,7 +220,7 @@ export async function updateUtang(
       notes: d.notes || null,
     },
   });
-  await refreshUtangStatus(id);
+  await refreshUtangStatusStandalone(id);
   revalidateAll();
   return { success: true, message: "Utang updated." };
 }
@@ -266,7 +315,7 @@ export async function recordPayment(
       paymentDate: parseDateInput(d.date),
     },
   });
-  await refreshUtangStatus(d.utangId);
+  await refreshUtangStatusStandalone(d.utangId);
   revalidateAll();
   return { success: true, message: "Payment recorded." };
 }
@@ -277,7 +326,125 @@ export async function deletePayment(id: string): Promise<ActionResult> {
     return { success: false, error: "Payment not found." };
   }
   await prisma.utangPayment.delete({ where: { id } });
-  await refreshUtangStatus(payment.utangId);
+  await refreshUtangStatusStandalone(payment.utangId);
   revalidateAll();
   return { success: true, message: "Payment deleted." };
+}
+
+async function findOrCreateCustomer(
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  branchId: string,
+  name: string
+) {
+  const trimmed = name.trim();
+  const customers = await tx.customer.findMany({ where: { branchId } });
+  const match = customers.find(
+    (c) => c.name.toLowerCase() === trimmed.toLowerCase()
+  );
+  if (match) return match;
+  return tx.customer.create({
+    data: { branchId, name: trimmed },
+  });
+}
+
+export async function recordSaleAsUtang(
+  input: SaleAsUtangInput
+): Promise<ActionResult<{ customerId: string }>> {
+  const parsed = saleAsUtangSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: "Please fix the highlighted fields.",
+      fieldErrors: fieldErrorsFromZod(parsed.error),
+    };
+  }
+  const d = parsed.data;
+  const utangDate = parseDateInput(d.date);
+  const cashReceived = roundMoney(d.cashReceived);
+
+  const branchId = await getActiveBranchId();
+  if (!branchId) {
+    return { success: false, error: "Select a specific branch before making changes." };
+  }
+
+  let line: UtangLine;
+  let total = 0;
+
+  if (d.productId) {
+    const product = await prisma.product.findUnique({ where: { id: d.productId } });
+    if (!product || product.branchId !== branchId) {
+      return { success: false, error: "Product not found." };
+    }
+    const unitPrice = roundMoney(product.sellingPrice);
+    total = roundMoney(unitPrice * d.quantity);
+    line = {
+      productId: product.id,
+      name: product.name,
+      quantity: d.quantity,
+      unitPrice,
+      lineTotal: total,
+    };
+  } else {
+    const unitPrice = roundMoney(d.unitPrice!);
+    total = roundMoney(unitPrice * d.quantity);
+    line = {
+      productId: null,
+      name: d.name!.trim(),
+      quantity: d.quantity,
+      unitPrice,
+      lineTotal: total,
+    };
+  }
+
+  if (total <= 0) {
+    return { success: false, error: "Total must be greater than zero." };
+  }
+  if (cashReceived >= total) {
+    return {
+      success: false,
+      error: "Cash covers the total. Use Record Sale instead.",
+    };
+  }
+
+  let customerId: string | null = null;
+  let summaryBranchId: string | null = null;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      let customer;
+      if (d.customerId?.trim()) {
+        customer = await tx.customer.findUnique({
+          where: { id: d.customerId },
+        });
+        if (!customer || customer.branchId !== branchId) {
+          throw new Error("Customer not found.");
+        }
+      } else {
+        customer = await findOrCreateCustomer(tx, branchId, d.customerName!);
+      }
+      customerId = customer.id;
+
+      const { branchId: bid } = await createUtangRecord(tx, {
+        customerId: customer.id,
+        utangDate,
+        notes: cashReceived > 0 ? `Partial cash: ${cashReceived}` : null,
+        lines: [line],
+        initialPayment: cashReceived,
+      });
+      summaryBranchId = bid;
+    });
+  } catch (e) {
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : "Failed to record utang.",
+    };
+  }
+
+  if (summaryBranchId) await recomputeDailySummary(summaryBranchId, utangDate);
+  revalidateAll();
+  return {
+    success: true,
+    message: "Utang recorded.",
+    data: { customerId: customerId! },
+  };
 }
