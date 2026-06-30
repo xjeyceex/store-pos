@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,10 +36,17 @@ import {
 import { EmptyState } from "@/components/shared/empty-state";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { FieldError } from "@/components/shared/field-error";
+import {
+  BarcodeScannerDialog,
+  ScanBarcodeButton,
+} from "@/components/barcode/barcode-scanner-dialog";
+import { QuickAddAndSellDialog } from "@/components/sales/quick-add-and-sell-dialog";
 import { formatCurrency, formatNumber } from "@/lib/currency";
 import { formatDate, toISODate } from "@/lib/dates";
+import { fetchBarcodeLookup } from "@/lib/barcode-client";
 import { saleSchema, type SaleInput } from "@/lib/validations/sale";
 import { createSale, deleteSale } from "@/lib/actions/sales";
+import type { BarcodeLookupResult } from "@/lib/barcode-meta";
 import type { ProductOption } from "@/lib/queries/products";
 import type { SaleRow } from "@/lib/queries/sales";
 
@@ -56,11 +64,20 @@ export function SalesClient({
   products,
   sales,
   currency,
+  defaultMinStock = 5,
 }: {
   products: ProductOption[];
   sales: SaleRow[];
   currency: string;
+  defaultMinStock?: number;
 }) {
+  const router = useRouter();
+  const [scannerOpen, setScannerOpen] = React.useState(false);
+  const [continuousScan, setContinuousScan] = React.useState(false);
+  const [quickAddOpen, setQuickAddOpen] = React.useState(false);
+  const [quickAddLookup, setQuickAddLookup] =
+    React.useState<BarcodeLookupResult | null>(null);
+  const [scanBusy, setScanBusy] = React.useState(false);
   const {
     register,
     handleSubmit,
@@ -112,6 +129,47 @@ export function SalesClient({
     setValue("quantity", next);
   }
 
+  async function handleBarcodeScan(code: string) {
+    if (scanBusy) return;
+    setScanBusy(true);
+    try {
+      const result = await fetchBarcodeLookup(code);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+
+      if (result.source === "local" && result.productId) {
+        if ((result.currentStock ?? 0) <= 0) {
+          toast.error(`${result.name} is out of stock.`);
+          return;
+        }
+        const sale = await createSale({
+          productId: result.productId,
+          quantity: 1,
+          date: toISODate(new Date()),
+        });
+        if (sale.success) {
+          toast.success(`${result.name} — sale recorded`);
+          router.refresh();
+        } else {
+          toast.error(sale.error);
+        }
+        return;
+      }
+
+      if (result.source === "openfoodfacts") {
+        setQuickAddLookup(result);
+        setQuickAddOpen(true);
+        return;
+      }
+
+      toast.error("Barcode not recognized. Add the product manually first.");
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
   async function onSubmit(values: SaleInput) {
     const payload: SaleInput = values.productId
       ? {
@@ -145,11 +203,27 @@ export function SalesClient({
     <div className="space-y-6">
       <Card className="border-primary/20 shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle>Quick Sale</CardTitle>
-          <CardDescription>
-            Pick a product or type a new item — custom sales are saved to your
-            product list automatically.
-          </CardDescription>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Quick Sale</CardTitle>
+              <CardDescription>
+                Pick a product, scan a barcode, or type a new item — custom sales
+                are saved to your product list automatically.
+              </CardDescription>
+            </div>
+            <div className="flex flex-col gap-2 sm:items-end">
+              <ScanBarcodeButton onClick={() => setScannerOpen(true)} />
+              <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={continuousScan}
+                  onChange={(e) => setContinuousScan(e.target.checked)}
+                  className="size-3.5 rounded border-input"
+                />
+                Continuous scan
+              </label>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4">
@@ -379,6 +453,21 @@ export function SalesClient({
           </Card>
         )}
       </div>
+
+      <BarcodeScannerDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onScan={handleBarcodeScan}
+        continuous={continuousScan}
+      />
+      <QuickAddAndSellDialog
+        open={quickAddOpen}
+        onOpenChange={setQuickAddOpen}
+        lookup={quickAddLookup}
+        currency={currency}
+        defaultMinStock={defaultMinStock}
+        onSold={() => router.refresh()}
+      />
     </div>
   );
 }

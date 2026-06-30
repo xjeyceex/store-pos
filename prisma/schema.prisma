@@ -43,6 +43,7 @@ model Product {
   branchId      String
   branch        Branch         @relation(fields: [branchId], references: [id], onDelete: Cascade)
   name          String
+  barcode       String?
   categoryId    String?
   category      Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   costPrice     Float          @default(0)
@@ -59,6 +60,7 @@ model Product {
   @@index([branchId])
   @@index([categoryId])
   @@index([name])
+  @@unique([branchId, barcode])
 }
 
 model InventoryLog {

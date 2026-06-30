@@ -5,6 +5,7 @@ import type { StockStatus } from "@/lib/constants";
 export type ProductRow = {
   id: string;
   name: string;
+  barcode: string | null;
   categoryId: string | null;
   categoryName: string | null;
   costPrice: number;
@@ -22,6 +23,7 @@ export type ProductRow = {
 export type ProductOption = {
   id: string;
   name: string;
+  barcode: string | null;
   sellingPrice: number;
   costPrice: number;
   currentStock: number;
@@ -38,6 +40,7 @@ export async function getProducts(
   return products.map((p) => ({
     id: p.id,
     name: p.name,
+    barcode: p.barcode,
     categoryId: p.categoryId,
     categoryName: p.category?.name ?? null,
     costPrice: p.costPrice,
@@ -66,6 +69,7 @@ export async function getProductOptions(
     select: {
       id: true,
       name: true,
+      barcode: true,
       sellingPrice: true,
       costPrice: true,
       currentStock: true,

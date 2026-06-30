@@ -34,6 +34,7 @@ export default async function InventoryPage() {
   const mapped = products.map((p) => ({
     id: p.id,
     name: p.name,
+    barcode: p.barcode,
     sellingPrice: p.sellingPrice,
     costPrice: p.costPrice,
     currentStock: p.currentStock,

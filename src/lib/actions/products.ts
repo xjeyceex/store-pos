@@ -10,6 +10,21 @@ import { fieldErrorsFromZod } from "@/lib/zod-helpers";
 import type { ActionResult } from "@/lib/types";
 
 const NO_BRANCH = "Select a specific branch before making changes.";
+const BARCODE_TAKEN = "Barcode already used in this branch.";
+
+function normalizeBarcodeInput(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
 
 async function resolveCategoryId(
   categoryName?: string | null
@@ -24,7 +39,7 @@ async function resolveCategoryId(
 
 export async function createProduct(
   input: ProductInput
-): Promise<ActionResult> {
+): Promise<ActionResult<{ id: string }>> {
   const parsed = productSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -37,38 +52,47 @@ export async function createProduct(
   const branchId = await getActiveBranchId();
   if (!branchId) return { success: false, error: NO_BRANCH };
   const categoryId = await resolveCategoryId(d.categoryName);
+  const barcode = normalizeBarcodeInput(d.barcode);
 
-  const product = await prisma.product.create({
-    data: {
-      branchId,
-      name: d.name,
-      categoryId,
-      costPrice: roundMoney(d.costPrice),
-      sellingPrice: roundMoney(d.sellingPrice),
-      currentStock: d.currentStock,
-      minStockLevel: d.minStockLevel,
-      notes: d.notes || null,
-    },
-  });
-
-  if (d.currentStock > 0) {
-    await prisma.inventoryLog.create({
+  try {
+    const product = await prisma.product.create({
       data: {
         branchId,
-        productId: product.id,
-        productName: product.name,
-        quantityBefore: 0,
-        quantityChange: d.currentStock,
-        quantityAfter: d.currentStock,
-        reason: "NEW_STOCK",
-        note: "Initial stock",
+        name: d.name,
+        barcode,
+        categoryId,
+        costPrice: roundMoney(d.costPrice),
+        sellingPrice: roundMoney(d.sellingPrice),
+        currentStock: d.currentStock,
+        minStockLevel: d.minStockLevel,
+        notes: d.notes || null,
       },
     });
-  }
 
-  await recomputeDailySummary(branchId, new Date());
-  revalidateAll();
-  return { success: true, message: "Product added." };
+    if (d.currentStock > 0) {
+      await prisma.inventoryLog.create({
+        data: {
+          branchId,
+          productId: product.id,
+          productName: product.name,
+          quantityBefore: 0,
+          quantityChange: d.currentStock,
+          quantityAfter: d.currentStock,
+          reason: "NEW_STOCK",
+          note: "Initial stock",
+        },
+      });
+    }
+
+    await recomputeDailySummary(branchId, new Date());
+    revalidateAll();
+    return { success: true, message: "Product added.", data: { id: product.id } };
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return { success: false, error: BARCODE_TAKEN };
+    }
+    throw error;
+  }
 }
 
 export async function updateProduct(
@@ -91,19 +115,28 @@ export async function updateProduct(
   }
 
   const categoryId = await resolveCategoryId(d.categoryName);
+  const barcode = normalizeBarcodeInput(d.barcode);
 
-  await prisma.product.update({
-    where: { id },
-    data: {
-      name: d.name,
-      categoryId,
-      costPrice: roundMoney(d.costPrice),
-      sellingPrice: roundMoney(d.sellingPrice),
-      currentStock: d.currentStock,
-      minStockLevel: d.minStockLevel,
-      notes: d.notes || null,
-    },
-  });
+  try {
+    await prisma.product.update({
+      where: { id },
+      data: {
+        name: d.name,
+        barcode,
+        categoryId,
+        costPrice: roundMoney(d.costPrice),
+        sellingPrice: roundMoney(d.sellingPrice),
+        currentStock: d.currentStock,
+        minStockLevel: d.minStockLevel,
+        notes: d.notes || null,
+      },
+    });
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return { success: false, error: BARCODE_TAKEN };
+    }
+    throw error;
+  }
 
   // If stock changed via the product form, record an adjustment log.
   if (d.currentStock !== existing.currentStock) {

@@ -107,6 +107,7 @@ type ProductDef = {
   sell: number;
   stock: number;
   min: number;
+  barcode?: string;
 };
 
 const CATEGORIES = [
@@ -122,16 +123,16 @@ const CATEGORIES = [
 ];
 
 const PRODUCTS: ProductDef[] = [
-  { name: "Coca-Cola 1.5L", cat: "Beverages", cost: 55, sell: 70, stock: 40, min: 8 },
-  { name: "Kopiko Brown 3-in-1", cat: "Beverages", cost: 6, sell: 8, stock: 150, min: 25 },
+  { name: "Coca-Cola 1.5L", cat: "Beverages", cost: 55, sell: 70, stock: 40, min: 8, barcode: "5449000000996" },
+  { name: "Kopiko Brown 3-in-1", cat: "Beverages", cost: 6, sell: 8, stock: 150, min: 25, barcode: "4800080140123" },
   { name: "C2 Green Tea 500ml", cat: "Beverages", cost: 18, sell: 25, stock: 36, min: 8 },
   { name: "Bear Brand Milk 33g", cat: "Beverages", cost: 10, sell: 14, stock: 60, min: 12 },
-  { name: "Piattos Cheese", cat: "Snacks", cost: 12, sell: 18, stock: 50, min: 10 },
+  { name: "Piattos Cheese", cat: "Snacks", cost: 12, sell: 18, stock: 50, min: 10, barcode: "4800084012345" },
   { name: "Nova Multigrain", cat: "Snacks", cost: 12, sell: 18, stock: 45, min: 10 },
-  { name: "Skyflakes Crackers", cat: "Snacks", cost: 6, sell: 9, stock: 80, min: 15 },
+  { name: "Skyflakes Crackers", cat: "Snacks", cost: 6, sell: 9, stock: 80, min: 15, barcode: "4800084015678" },
   { name: "Argentina Corned Beef 150g", cat: "Canned Goods", cost: 28, sell: 38, stock: 36, min: 8 },
   { name: "555 Sardines 155g", cat: "Canned Goods", cost: 16, sell: 22, stock: 48, min: 10 },
-  { name: "Lucky Me Pancit Canton", cat: "Noodles", cost: 12, sell: 16, stock: 100, min: 20 },
+  { name: "Lucky Me Pancit Canton", cat: "Noodles", cost: 12, sell: 16, stock: 100, min: 20, barcode: "4800016123456" },
   { name: "Lucky Me Beef Mami", cat: "Noodles", cost: 11, sell: 15, stock: 90, min: 20 },
   { name: "Datu Puti Soy Sauce 200ml", cat: "Condiments", cost: 12, sell: 17, stock: 30, min: 6 },
   { name: "Silver Swan Vinegar 200ml", cat: "Condiments", cost: 11, sell: 16, stock: 28, min: 6 },
@@ -245,6 +246,7 @@ async function seedBranch(
       data: {
         branchId,
         name: p.name,
+        barcode: p.barcode ?? null,
         categoryId: catIds[p.cat],
         costPrice: p.cost,
         sellingPrice: p.sell,
